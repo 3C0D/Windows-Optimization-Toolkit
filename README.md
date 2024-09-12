@@ -16,7 +16,7 @@ You can see them at the top of the file. edit it if needed.
 #Include TTS/TTS.ahk
 ```
   
-![shortcuts](./assets/Shortcuts_Viewer.png)
+![Shortcuts_Viewer](assets/Shortcuts_Viewer.png)
 
 
 #### Text-to-Speech (ahk)
@@ -71,7 +71,7 @@ Method 1: You can paste the HTML file alone anywhere and launch it by double-cli
 
 Method 2: Add to the context menu of Windows. You need to save the folder somewhere with all the files.
 
-![liseuse](liseuse.png)
+![liseuse](Assets/liseuse.png)
 
 Steps to add a batch file to the context menu via the Windows Registry
 
