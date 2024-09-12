@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liseuse de texte HTML</title>
+    <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+    <style>
+        body {
+            font: 18px 'Times New Roman', Times, serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #f9f9f9;
+            color: #141414;
+        }
+
+        .file-content {
+            position: relative;
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font: 20px 'Times New Roman', Times, serif;
+            color: #1f1f1f;
+        }
+
+        .file-input {
+            margin-bottom: 20px;
+        }
+
+        .copy-button {
+            position: absolute;
+            right: 80px;
+            padding: 5px 10px;
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+        }
+
+        .copy-button svg {
+            width: 24px;
+            height: 24px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Liseuse de texte HTML</h1>
+    <input type="file" class="file-input" accept=".txt" onchange="loadTextFile(this.files[0])">
+    <button class="copy-button" onclick="copyText()" title="Copier">
+        <svg id="copyIcon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-copy">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+    </button>
+    <div class="file-content"></div>
+    <script src="fileContent.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const fileContentDiv = document.querySelector('.file-content');
+            if (typeof fileContent !== 'undefined' && fileContent !== null) {
+                fileContentDiv.textContent = fileContent;
+            } else {
+                const filePath = getFileParamFromURL();
+                if (filePath) {
+                    loadFileFromPath(filePath);
+                } else {
+                    fileContentDiv.textContent = 'Aucun contenu disponible.';
+                }
+            }
+        });
+
+        function loadTextFile(file) {
+            const fileContentDiv = document.querySelector('.file-content');
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    fileContentDiv.textContent = reader.result;
+                };
+                reader.readAsText(file);
+            } else {
+                fileContentDiv.textContent = 'Aucun fichier texte sélectionné.';
+            }
+        }
+
+        function copyText() {
+            const fileContent = document.querySelector('.file-content');
+            const copyIcon = document.getElementById('copyIcon');
+            const originalIconHTML = copyIcon.innerHTML;
+            const originalIconClass = copyIcon.classList.value;
+
+            navigator.clipboard.writeText(fileContent.textContent).then(() => {
+                copyIcon.innerHTML = '<polyline points="20 6 9 17 4 12"></polyline>';
+                copyIcon.classList.remove('lucide-copy');
+                copyIcon.classList.add('lucide-check');
+
+                setTimeout(() => {
+                    copyIcon.innerHTML = originalIconHTML;
+                    copyIcon.classList.value = originalIconClass;
+                }, 2000);
+            }).catch(err => {
+                console.error('Erreur lors de la copie du texte: ', err);
+            });
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.ctrlKey && event.key === 'a') {
+                event.preventDefault();
+                const fileContent = document.querySelector('.file-content');
+                if (fileContent) {
+                    const range = document.createRange();
+                    const selection = window.getSelection();
+                    range.selectNodeContents(fileContent);
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                }
+            }
+        });
+
+        function getFileParamFromURL() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('file');
+        }
+
+        function loadFileFromPath(filePath) {
+            fetch(filePath)
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.text();
+                })
+                .then(text => {
+                    const fileContent = document.querySelector('.file-content');
+                    fileContent.textContent = text;
+                })
+                .catch(error => {
+                    console.error('Il y a eu un problème avec l\'opération fetch: ', error);
+                });
+        }
+
+        lucide.createIcons();
+    </script>
+</body>
+
+</html>
