@@ -18,7 +18,6 @@ You can see them at the top of the file. edit it if needed.
   
 ![Shortcuts_Viewer](Assets/shortcutsViewer.png)
 
-
 #### Text-to-Speech (ahk)
 
 `Win+Y`: Start/Stop TTS on Selection or Clipboard, anywhere in Windows. I'm using a French(Microsoft Paul) and English(Microsoft Mark) voice in the script. 
