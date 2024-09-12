@@ -16,7 +16,7 @@ You can see them at the top of the file. edit it if needed.
 #Include TTS/TTS.ahk
 ```
   
-![Shortcuts_Viewer](assets/shortcutsViewer.png)
+![Shortcuts_Viewer](Assets/shortcutsViewer.png)
 
 
 #### Text-to-Speech (ahk)
