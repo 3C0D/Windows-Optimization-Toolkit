@@ -59,19 +59,18 @@ ReadText(language) {
     OldClipboard := A_Clipboard
     A_Clipboard := ""
 
-    Send "^c" ; Copie le texte sélectionné
-    if !ClipWait(2) {
+    Send "^c" ; Copy the selected text
+    if !ClipWait(0.5) {
+        ; If no selection, restore the clipboard and use it for translation
         if (OldClipboard != "") {
             SelectedText := OldClipboard
             A_Clipboard := OldClipboard
         } else {
-            ; Si ni sélection ni presse-papiers retourner
-            MsgBox "Aucun texte sélectionné ou contenu dans le presse-papiers"
-            A_Clipboard := OldClipboard
+            MsgBox "No text selected or in the clipboard"
             return
         }
     } else {
-        ; Si du texte est sélectionné, l'utiliser pour la synthèse vocale
+        ; Use the selected text for translation
         SelectedText := A_Clipboard
     }
 
