@@ -18,7 +18,11 @@ call "%VENV_PATH%\Scripts\activate"
 @REM pip install -r "%~dp0requirements.txt"
 
 :: Run the Python script
-python "%~dp0transcription_script.py"
+python "%~dp0download_video.py"
+
+
+:: Pause to view results
+pause
 
 :: Deactivate the virtual environment
 deactivate

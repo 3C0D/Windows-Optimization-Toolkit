@@ -4,6 +4,7 @@ import sys
 import subprocess
 import importlib.metadata
 import os
+import warnings
 
 def read_requirements(file_path):
     """Lire les packages requis dans le fichier de requirements"""
@@ -42,22 +43,24 @@ try:
     check_and_install_modules(required_modules)
 except Exception as e:
     print(f"Erreur lors de l'installation des modules : {e}")
+    sys.exit(1)
 
+# Importer les modules nécessaires
 try:
-    import warnings
-    import whisper
     import pyperclip
-    import yt_dlp
     import json
+    import yt_dlp
+    import re
     from bs4 import BeautifulSoup
     import requests
     from pydub import AudioSegment
     import numpy as np
+    import whisper
     from googletrans import Translator
-    import re
 except ImportError as e:
     print(f"Erreur lors de l'importation des modules : {e}")
     print("Assurez-vous que tous les modules sont installés et essayez à nouveau.")
+    sys.exit(1)
 
 # Filtrer les avertissements spécifiques
 warnings.filterwarnings("ignore", category=UserWarning, module='whisper')

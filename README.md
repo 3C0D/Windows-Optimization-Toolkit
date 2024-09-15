@@ -40,6 +40,8 @@ I recommand to create a shortcut on desktop.
 Sometimes without reason your connection can be cut. This a fast way to **restart** it or just to **switch** it.
 
 ## Folder Transcription_python
+
+new: I added a batch dowload_video.bat just to download videos from Odysee and YouTube. just set your target path (local_path) in dowload_video.py.
   
 To obtain the transcription of videos on Odysee and YouTube in English and French.  
 Copy the link of the video into the clipboard, then run the batch `Transcription_python\transcritption_files\transcript.bat`.  
