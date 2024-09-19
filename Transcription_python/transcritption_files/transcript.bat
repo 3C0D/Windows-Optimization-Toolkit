@@ -20,8 +20,6 @@ call "%VENV_PATH%\Scripts\activate"
 :: Run the Python script
 python "%~dp0transcription_script.py"
 
-:: Deactivate the virtual environment
-deactivate
 
 :: Pause to view results
 pause
