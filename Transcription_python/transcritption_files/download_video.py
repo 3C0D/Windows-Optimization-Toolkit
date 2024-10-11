@@ -56,12 +56,12 @@ except Exception as e:
 
 # Importer les modules nécessaires
 try:
-    import pyperclip
+    import pyperclip # type: ignore
     import json
-    import yt_dlp
+    import yt_dlp # type: ignore
     import re
-    from bs4 import BeautifulSoup
-    import requests
+    from bs4 import BeautifulSoup # type: ignore
+    import requests # type: ignore
 
 except ImportError as e:
     print(f"Erreur lors de l'importation des modules : {e}")
@@ -117,16 +117,33 @@ def download_youtube_video(url):
         "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "outtmpl": os.path.join(local_path, "%(title)s.%(ext)s"),
         "ffmpeg_location": r"C:\ffmpeg\bin\ffmpeg.exe",
+        # "noplaylist": True,  # Ajouté pour éviter le téléchargement de playlists
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+            # Extract info
+            info_dict = ydl.extract_info(url, download=False)
+            video_title = info_dict.get("title", None)
+            video_ext = info_dict.get("ext", "mp4")
+            expected_filename = f"{video_title}.{video_ext}"
+            expected_filepath = os.path.join(local_path, expected_filename)
+
+            # Étape 2 : Vérifier si le fichier existe déjà
+            if os.path.exists(expected_filepath):
+                print(
+                    f"Le fichier '{expected_filename}' existe déjà dans '{local_path}'. Téléchargement ignoré."
+                )
+                return
+
+            # Étape 3 : Télécharger la vidéo si le fichier n'existe pas
+            ydl.download([url])
             print("Téléchargement terminé.")
-            return os.path.join(local_path, f"{info['title']}.mp4"), info["title"]
+            return
+
     except Exception as e:
         print(f"Erreur lors du téléchargement : {str(e)}")
-        return None, None
+        return
 
 
 def download_odysee_video(url):
@@ -136,17 +153,34 @@ def download_odysee_video(url):
     local_path = r"C:\Users\dd200\Downloads\Video\Odysee"
     video_name = soup.find("title").text + ".mp4"
     video_path = os.path.join(local_path, video_name)
-    script_tag = soup.find("script", type="application/ld+json")
-    json_content = json.loads(script_tag.string)
-    video_url = json_content.get("contentUrl")
-    response = requests.get(video_url, stream=True)
 
-    with open(video_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
+    # Étape 1 : Vérifier si le fichier existe déjà
+    if os.path.exists(video_path):
+        print(
+            f"Le fichier '{video_name}' existe déjà dans '{local_path}'. Téléchargement ignoré."
+        )
+        return
 
-    print("Téléchargement terminé.")
+    try:
+        script_tag = soup.find("script", type="application/ld+json")
+        json_content = json.loads(script_tag.string)
+        video_url = json_content.get("contentUrl")
+
+        if not video_url:
+            print("URL du contenu non trouvée dans les métadonnées.")
+            return
+
+        response = requests.get(video_url, stream=True)
+
+        with open(video_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+
+        print("Téléchargement terminé.")
+
+    except Exception as e:
+        print(f"Erreur lors du téléchargement : {str(e)}")
 
 
 def main():
@@ -165,7 +199,7 @@ def main():
 
     if "youtube.com" in url:
         try:
-            audio_file, video_title = download_youtube_video(url)
+            download_youtube_video(url)
         except Exception as e:
             print(f"Erreur lors du téléchargement de la video YouTube : {e}")
             return
