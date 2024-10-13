@@ -1,60 +1,57 @@
 ﻿#Requires AutoHotkey v2.0
 
 InitializeVoices() {
-    ; Chemin de registre source pour les voix
+    ; Registry source path for voices
     sourcePath := "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"
 
-    ; Chemins de registre de destination
+    ; Registry destination paths
     destinationPaths := [
-    "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens",
-    "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\SPEECH\Voices\Tokens"
+        "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens",
+        "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\SPEECH\Voices\Tokens"
     ]
 
-    ; Copie des voix du chemin source vers les chemins de destination
+    ; Copy voices from source path to destination paths
     try {
         for destPath in destinationPaths {
-            Loop Reg, sourcePath, "K"
-            {
+            loop reg, sourcePath, "K" {
                 sourceKey := A_LoopRegKey . "" . A_LoopRegName
                 destKey := destPath . "" . A_LoopRegName
-                ; Crée la clé de destination si elle n'existe pas
+                ; Create destination key if it doesn't exist
                 if !RegRead(destKey)
                     RegCreateKey(destKey)
 
-                ; Copie les valeurs
-                Loop Reg, sourceKey, "V"
-                {
+                ; Copy values
+                loop reg, sourceKey, "V" {
                     RegWrite(RegRead(sourceKey, A_LoopRegName), "REG_SZ", destKey, A_LoopRegName)
                 }
             }
-        } 
-        MsgBox "Copie des voix terminée avec succès." 
+        }
+        MsgBox "Voice copying completed successfully."
     } catch as err {
-        ; MsgBox "Erreur lors de la copie des voix : " . err.Message
-    } 
+        ; MsgBox "Error while copying voices: " . err.Message
+    }
 }
 
 InitializeVoices()
 
-; Variables globales
-global isReading := false
+; Global variables
+global state := { isReading: false, isPaused: false
+}
 global voice := ComObject("SAPI.SpVoice")
 
-; Définit le raccourci Windows+Y pour l'autodétection
+; play/stop
 #y:: ReadText("AUTO")
 
-ReadText(language) {
-    global isReading, voice
+; pause/resume
+#!y:: TogglePause()
 
-    if (voice.Status.RunningState == 2) {
-        voice.Speak("", 3) ; Arrête la lecture en cours
-        isReading := false
+ReadText(language) {
+    if (voice.Status.RunningState == 2 || state.isPaused) {
+        StopReading()
         return
     }
 
-    if (isReading) {
-        isReading := false
-    }
+    ResetState()
 
     OldClipboard := A_Clipboard
     A_Clipboard := ""
@@ -80,14 +77,42 @@ ReadText(language) {
         SetVoiceLanguage(language, SelectedText)
         voice.Rate := 2
 
-        isReading := true
-        voice.Speak(SelectedText, 1) ; Lecture asynchrone
+        state.isReading := true
+        voice.Speak(SelectedText, 1) ; Asynchronous reading
     } catch as err {
-        MsgBox "Erreur lors de l'utilisation de la synthèse vocale: " . err.Message
-        isReading := false
+        MsgBox "Error while using text-to-speech: " . err.Message
+        ResetState()
+    } finally {
+        A_Clipboard := OldClipboard
+    }
+}
+
+TogglePause() {
+    if (!state.isReading) {
+        return
     }
 
-    A_Clipboard := OldClipboard
+    if (!state.isPaused) {
+        voice.Pause()
+        state.isPaused := true
+    } else {
+        voice.Resume()
+        state.isPaused := false
+    }
+}
+
+ResetState() {
+    state.isReading := false
+    state.isPaused := false
+}
+
+StopReading() {
+    if (state.isPaused) {
+        voice.Resume()  ; Resume before stopping to ensure proper state
+        state.isPaused := false
+    }
+    voice.Speak("", 3)  ; Stop current reading
+    ResetState()
 }
 
 SetVoiceLanguage(language, text := "") {
@@ -95,30 +120,33 @@ SetVoiceLanguage(language, text := "") {
         language := DetectLanguage(text)
     }
 
-    ; Utiliser les noms exacts des voix disponibles
     if (language == "EN") {
         voiceName := "Microsoft Mark"
     } else if (language == "FR") {
-        voiceName := "Microsoft Paul" ; Modifiez ceci pour utiliser une autre voix, si disponible
+        voiceName := "Microsoft Paul"
     } else {
-        MsgBox "Langue non supportée : " . language
+        MsgBox "Unsupported language: " . language
         return
     }
 
-    for v in ComObject("SAPI.SpVoice").GetVoices() {
+    for v in voice.GetVoices() {
         if (v.GetAttribute("Name") == voiceName) {
             voice.Voice := v
             return
         }
     }
 
-    MsgBox "Voix pour la langue " . language . " non trouvée. Utilisation de la voix par défaut."
+    MsgBox "Voice for language " . language . " not found. Using default voice."
 }
 
 DetectLanguage(text) {
-    ; Détection de la langue basée sur des mots courants
-    frenchWords := ["le", "la", "les", "un", "une", "des", "et", "ou", "mais", "donc", "or", "ni", "car", "que", "qui", "quoi", "dont", "où", "à", "au", "avec", "pour", "sur", "dans", "par", "ce", "cette", "ces"]
-    englishWords := ["the", "and", "or", "but", "so", "yet", "for", "nor", "that", "which", "who", "whom", "whose", "when", "where", "why", "how", "a", "an", "in", "on", "at", "with", "by", "this", "these", "those", "is"]
+    ; Language detection based on common words
+    frenchWords := ["le", "la", "les", "un", "une", "des", "et", "ou", "mais", "donc", "or", "ni", "car", "que", "qui",
+        "quoi", "dont", "où", "à", "au", "avec", "pour", "sur", "dans", "par", "ce", "cette", "ces"
+    ]
+    englishWords := ["the", "and", "or", "but", "so", "yet", "for", "nor", "that", "which", "who", "whom", "whose",
+        "when", "where", "why", "how", "a", "an", "in", "on", "at", "with", "by", "this", "these", "those", "is"
+    ]
 
     frenchScore := 0
     englishScore := 0
@@ -136,19 +164,20 @@ DetectLanguage(text) {
     } else if (frenchScore > englishScore) {
         return "FR"
     } else {
-        return "FR" ; Par défaut, considère le français
+        return "FR" ; By default, consider French
     }
 }
 
 HasVal(haystack, needle) {
     for index, value in haystack
         if (value = needle)
-        return true
+            return true
     return false
 }
 
 IgnoreCharacters(text) {
-    charactersToIgnore := ["*", "#", "@", "//"]
+    charactersToIgnore := ["*", "#", "@", "//"
+    ]
     for char in charactersToIgnore {
         text := StrReplace(text, char, "")
     }
