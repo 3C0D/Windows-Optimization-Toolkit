@@ -1,6 +1,12 @@
 ﻿#Requires AutoHotkey v2.0
 
 InitializeVoices() {
+    ; Skip voice copying if we don't have admin rights
+    if !A_IsAdmin {
+        ; MsgBox "Running without admin rights - skipping voice copying"
+        return
+    }
+
     ; Registry source path for voices
     sourcePath := "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"
 
@@ -14,8 +20,8 @@ InitializeVoices() {
     try {
         for destPath in destinationPaths {
             loop reg, sourcePath, "K" {
-                sourceKey := A_LoopRegKey . "" . A_LoopRegName
-                destKey := destPath . "" . A_LoopRegName
+                sourceKey := A_LoopRegKey "\" A_LoopRegName
+                destKey := destPath "\" A_LoopRegName
                 ; Create destination key if it doesn't exist
                 if !RegRead(destKey)
                     RegCreateKey(destKey)
@@ -28,22 +34,62 @@ InitializeVoices() {
         }
         MsgBox "Voice copying completed successfully."
     } catch as err {
-        ; MsgBox "Error while copying voices: " . err.Message
+        MsgBox "Error while copying voices: " . err.Message
     }
 }
 
-InitializeVoices()
+; ; Check if script is running as admin and if not, try to elevate
+; if !A_IsAdmin {
+;     try {
+;         if A_IsCompiled
+;             Run '*RunAs "' A_ScriptFullPath '" /restart'
+;         else
+;             Run '*RunAs "' A_AhkPath '" /restart "' A_ScriptFullPath '"'
+;     }
+; }
+
+; Activez si les voix ne sont pas trouvées.
+; InitializeVoices()
 
 ; Global variables
-global state := { isReading: false, isPaused: false
+global state := {
+    isReading: false,
+    isPaused: false,
+    speed: 2.0,  ; Vitesse pour l'affichage
+    internalRate: 2  ; Vitesse entière pour SAPI
 }
 global voice := ComObject("SAPI.SpVoice")
+
+; Gestion des hotkeys
+UpdateHotkeys(enable := true) {
+    if (enable) {
+        Hotkey "NumpadAdd", "On"
+        Hotkey "NumpadSub", "On"
+    } else {
+        Hotkey "NumpadAdd", "Off"
+        Hotkey "NumpadSub", "Off"
+    }
+}
+
+; Initialisation des hotkeys
+Hotkey "NumpadAdd", AdjustSpeedUp
+Hotkey "NumpadSub", AdjustSpeedDown
+; Désactiver les hotkeys au démarrage
+UpdateHotkeys(false)
 
 ; play/stop
 #y:: ReadText("AUTO")
 
 ; pause/resume
 #!y:: TogglePause()
+
+AdjustSpeedUp(*) {
+    AdjustSpeed(0.5)
+}
+
+AdjustSpeedDown(*) {
+    AdjustSpeed(-0.5)
+}
 
 ReadText(language) {
     if (voice.Status.RunningState == 2 || state.isPaused) {
@@ -75,16 +121,70 @@ ReadText(language) {
 
     try {
         SetVoiceLanguage(language, SelectedText)
-        voice.Rate := 2
+        voice.Rate := state.internalRate  ; Utilise la vitesse entière
 
         state.isReading := true
+        ; Activer les hotkeys quand la lecture commence
+        UpdateHotkeys(true)
         voice.Speak(SelectedText, 1) ; Asynchronous reading
+
+        ; Surveiller l'état de la lecture
+        SetTimer(CheckReadingStatus, 100)
     } catch as err {
         MsgBox "Error while using text-to-speech: " . err.Message
         ResetState()
     } finally {
         A_Clipboard := OldClipboard
     }
+}
+
+CheckReadingStatus() {
+    if (voice.Status.RunningState == 1) { ; Si la lecture est terminée
+        StopReading()
+        SetTimer(CheckReadingStatus, 0) ; Arrêter le timer
+    }
+}
+
+AdjustSpeed(delta) {
+    if (!state.isReading)
+        return
+
+    ; Met à jour la vitesse pour l'affichage
+    state.speed := Max(Min(state.speed + delta, 10), -10)
+    state.speed := Round(state.speed, 1)
+
+    ; Convertit en entier pour SAPI
+    state.internalRate := Round(state.speed)
+    voice.Rate := state.internalRate 
+
+    ; Affiche la fenêtre de vitesse
+    ShowSpeedWindow()
+}
+
+ShowSpeedWindow() {
+    static speedGui := false
+
+    ; Si une fenêtre existe déjà, la détruire
+    if (speedGui) {
+        speedGui.Destroy()
+    }
+
+    ; Créer une nouvelle fenêtre
+    speedGui := Gui("+AlwaysOnTop -Caption +ToolWindow")
+    speedGui.SetFont("s12", "Arial")
+    speedGui.Add("Text", , "Vitesse: " . Format("{:.1f}", state.speed))
+    ; Positionner la fenêtre
+    screenWidth := A_ScreenWidth
+    screenHeight := A_ScreenHeight
+    guiWidth := 150
+    guiHeight := 40
+    xPos := (screenWidth - guiWidth) / 2
+    yPos := screenHeight - 100
+
+    speedGui.Show("x" . xPos . " y" . yPos . " w" . guiWidth . " h" . guiHeight)
+
+    ; Fermer la fenêtre après 2 secondes
+    SetTimer () => speedGui.Destroy(), -2000
 }
 
 TogglePause() {
@@ -104,6 +204,8 @@ TogglePause() {
 ResetState() {
     state.isReading := false
     state.isPaused := false
+    ; Désactiver les hotkeys quand on réinitialise l'état
+    UpdateHotkeys(false)
 }
 
 StopReading() {
