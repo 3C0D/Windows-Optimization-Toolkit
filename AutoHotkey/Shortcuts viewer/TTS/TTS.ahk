@@ -38,29 +38,21 @@ InitializeVoices() {
     }
 }
 
-; ; Check if script is running as admin and if not, try to elevate
-; if !A_IsAdmin {
-;     try {
-;         if A_IsCompiled
-;             Run '*RunAs "' A_ScriptFullPath '" /restart'
-;         else
-;             Run '*RunAs "' A_AhkPath '" /restart "' A_ScriptFullPath '"'
-;     }
-; }
-
-; Activez si les voix ne sont pas trouvées.
+; Uncomment if voices are not found.
 ; InitializeVoices()
 
 ; Global variables
 global state := {
     isReading: false,
     isPaused: false,
-    speed: 2.0,  ; Vitesse pour l'affichage
-    internalRate: 2  ; Vitesse entière pour SAPI
+    speed: 2.0,  ; Speed for display
+    internalRate: 2, ; Integer speed for SAPI
+    currentText: ""   ; Current text being read
 }
+
 global voice := ComObject("SAPI.SpVoice")
 
-; Gestion des hotkeys
+; Manage hotkeys
 UpdateHotkeys(enable := true) {
     if (enable) {
         Hotkey "NumpadAdd", "On"
@@ -71,14 +63,52 @@ UpdateHotkeys(enable := true) {
     }
 }
 
-; Initialisation des hotkeys
+; Initialize hotkeys
 Hotkey "NumpadAdd", AdjustSpeedUp
 Hotkey "NumpadSub", AdjustSpeedDown
-; Désactiver les hotkeys au démarrage
+; Disable hotkeys at start
 UpdateHotkeys(false)
 
 ; play/stop
 #y:: ReadText("AUTO")
+
+; Function to jump to the next line
+#^y:: {
+    ; Do nothing if reading is stopped or paused
+    if (!state.isReading || state.isPaused)
+        return
+
+    ; Get the currently reading text
+    text := state.currentText
+
+    ; Get the current position in the text
+    currentPos := voice.Status.InputWordPosition
+
+    ; Search for the next line after the current position
+    nextPos := -1
+    nextPos := InStr(text, "`n", true, currentPos + 1)
+
+    ; If a valid position is found
+    if (nextPos > 0) {
+        ; Stop the current reading
+        voice.Speak("", 3)  ; 3 = SVSFPurgeBeforeSpeak (stops immediately)
+
+        ; Extract remaining text starting just after the line break
+        remainingText := SubStr(text, nextPos + 1)
+
+        ; Remove any initial line breaks if present
+        remainingText := RegExReplace(remainingText, "^[\r\n]+", "")
+
+        ; Resume reading with the remaining text
+        if (remainingText != "") {
+            state.currentText := remainingText
+            voice.Rate := state.internalRate
+            voice.Speak(remainingText, 1)  ; 1 = SVSFlagsAsync (asynchronous reading)
+        } else {
+            StopReading()  ; If no more text, stop reading
+        }
+    }
+}
 
 ; pause/resume
 #!y:: TogglePause()
@@ -106,7 +136,7 @@ ReadText(language) {
     if !ClipWait(0.5) {
         ; If no selection, restore the clipboard and use it for translation
         if (OldClipboard != "") {
-            SelectedText := OldClipboard
+            state.currentText := OldClipboard
             A_Clipboard := OldClipboard
         } else {
             MsgBox "No text selected or in the clipboard"
@@ -114,21 +144,21 @@ ReadText(language) {
         }
     } else {
         ; Use the selected text for translation
-        SelectedText := A_Clipboard
+        state.currentText := A_Clipboard
     }
 
-    SelectedText := IgnoreCharacters(SelectedText)
+    state.currentText := IgnoreCharacters(state.currentText)
 
     try {
-        SetVoiceLanguage(language, SelectedText)
-        voice.Rate := state.internalRate  ; Utilise la vitesse entière
+        SetVoiceLanguage(language, state.currentText)
+        voice.Rate := state.internalRate
 
         state.isReading := true
-        ; Activer les hotkeys quand la lecture commence
+        ; Enable hotkeys when reading starts
         UpdateHotkeys(true)
-        voice.Speak(SelectedText, 1) ; Asynchronous reading
+        voice.Speak(state.currentText, 1) ; Asynchronous reading
 
-        ; Surveiller l'état de la lecture
+        ; Monitor reading status
         SetTimer(CheckReadingStatus, 100)
     } catch as err {
         MsgBox "Error while using text-to-speech: " . err.Message
@@ -139,9 +169,9 @@ ReadText(language) {
 }
 
 CheckReadingStatus() {
-    if (voice.Status.RunningState == 1) { ; Si la lecture est terminée
+    if (voice.Status.RunningState == 1) { ; If reading is complete
         StopReading()
-        SetTimer(CheckReadingStatus, 0) ; Arrêter le timer
+        SetTimer(CheckReadingStatus, 0) ; Stop the timer
     }
 }
 
@@ -149,31 +179,31 @@ AdjustSpeed(delta) {
     if (!state.isReading)
         return
 
-    ; Met à jour la vitesse pour l'affichage
+    ; Update display speed
     state.speed := Max(Min(state.speed + delta, 10), -10)
     state.speed := Round(state.speed, 1)
 
-    ; Convertit en entier pour SAPI
+    ; Convert to integer for SAPI
     state.internalRate := Round(state.speed)
-    voice.Rate := state.internalRate 
+    voice.Rate := state.internalRate
 
-    ; Affiche la fenêtre de vitesse
+    ; Display the speed window
     ShowSpeedWindow()
 }
 
 ShowSpeedWindow() {
     static speedGui := false
 
-    ; Si une fenêtre existe déjà, la détruire
+    ; Destroy existing window if present
     if (speedGui) {
         speedGui.Destroy()
     }
 
-    ; Créer une nouvelle fenêtre
+    ; Create a new window
     speedGui := Gui("+AlwaysOnTop -Caption +ToolWindow")
     speedGui.SetFont("s12", "Arial")
-    speedGui.Add("Text", , "Vitesse: " . Format("{:.1f}", state.speed))
-    ; Positionner la fenêtre
+    speedGui.Add("Text", , "Speed: " . Format("{:.1f}", state.speed))
+    ; Position the window
     screenWidth := A_ScreenWidth
     screenHeight := A_ScreenHeight
     guiWidth := 150
@@ -183,7 +213,7 @@ ShowSpeedWindow() {
 
     speedGui.Show("x" . xPos . " y" . yPos . " w" . guiWidth . " h" . guiHeight)
 
-    ; Fermer la fenêtre après 2 secondes
+    ; Close the window after 2 seconds
     SetTimer () => speedGui.Destroy(), -2000
 }
 
@@ -204,16 +234,16 @@ TogglePause() {
 ResetState() {
     state.isReading := false
     state.isPaused := false
-    ; Désactiver les hotkeys quand on réinitialise l'état
     UpdateHotkeys(false)
 }
 
 StopReading() {
     if (state.isPaused) {
-        voice.Resume()  ; Resume before stopping to ensure proper state
+        voice.Resume()
         state.isPaused := false
     }
     voice.Speak("", 3)  ; Stop current reading
+    state.currentText := "" ; Reset text
     ResetState()
 }
 
@@ -253,7 +283,8 @@ DetectLanguage(text) {
     frenchScore := 0
     englishScore := 0
 
-    words := StrSplit(text, " ")
+    ; Split text into words, normalize to lowercase for accurate counting
+    words := StrSplit(StrLower(text), " ")
     for word in words {
         if (HasVal(frenchWords, word))
             frenchScore++
@@ -261,16 +292,16 @@ DetectLanguage(text) {
             englishScore++
     }
 
+    ; Determine the language based on score
     if (englishScore > frenchScore) {
         return "EN"
-    } else if (frenchScore > englishScore) {
-        return "FR"
     } else {
-        return "FR" ; By default, consider French
+        return "FR" ; Defaults to French if scores are equal or French is higher
     }
 }
 
 HasVal(haystack, needle) {
+    ; Checks if a list contains a specific word
     for index, value in haystack
         if (value = needle)
             return true
@@ -278,8 +309,8 @@ HasVal(haystack, needle) {
 }
 
 IgnoreCharacters(text) {
-    charactersToIgnore := ["*", "#", "@", "//"
-    ]
+    ; Removes specific characters from text
+    charactersToIgnore := ["*", "#", "@", "//"]
     for char in charactersToIgnore {
         text := StrReplace(text, char, "")
     }

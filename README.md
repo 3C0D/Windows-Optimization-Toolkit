@@ -21,7 +21,8 @@ You can see them at the top of the file. edit it if needed.
 #### Text-to-Speech (ahk)
 
 `Win+Y`: Start/Stop TTS on Selection or Clipboard, anywhere in Windows. I'm using a French(Microsoft Paul) and English(Microsoft Mark) voice in the script.   
-`Alt+Win+Y`: Pause/Resume.  
+`Alt+Win+Y`: Pause/Resume. 
+`Ctrl+Win+Y`: Jump to next line. 
 `Numpad +/-`: Increase/Decrease speed (when reading).
 N.B: the script is normally registering missing voices in registry. For instance Paul by default is not registered.  
 you can double click `AutoHotkey\Shortcuts viewer\TTS\seeInstalledVoices.ahk` to see your installed voices.
