@@ -145,6 +145,7 @@ ReadText(language) {
                 state.currentText := OldClipboard
                 A_Clipboard := OldClipboard
             } else {
+                A_Clipboard := OldClipboard
                 return
             }
         }
@@ -154,7 +155,6 @@ ReadText(language) {
             state.currentText := OldClipboard
             A_Clipboard := OldClipboard
         } else {
-            MsgBox "No text selected or in the clipboard"
             return
         }
     }
