@@ -130,21 +130,33 @@ ReadText(language) {
     ResetState()
 
     OldClipboard := A_Clipboard
-    A_Clipboard := ""
-
-    Send "^c" ; Copy the selected text
-    if !ClipWait(0.5) {
-        ; If no selection, restore the clipboard and use it for translation
-        if (OldClipboard != "") {
+    ; Attempt to retrieve the current selection
+    A_Clipboard := ""  ; Optional, to ensure the clipboard is empty before copying
+    Send "^c"  ; Copy the selection
+    if ClipWait(0.8) {
+        selectedText := A_Clipboard
+        if (Trim(selectedText) != "") {
+            ; A non-empty selection has been copied
+            state.currentText := selectedText
+            ; The clipboard already contains the selected text
+        } else {
+            ; The selection is empty, use the previous clipboard content if available
+            if (Trim(OldClipboard) != "") {
+                state.currentText := OldClipboard
+                A_Clipboard := OldClipboard
+            } else {
+                return
+            }
+        }
+    } else {
+        ; No selection or ClipWait failed, use the previous clipboard content if available
+        if (Trim(OldClipboard) != "") {
             state.currentText := OldClipboard
             A_Clipboard := OldClipboard
         } else {
             MsgBox "No text selected or in the clipboard"
             return
         }
-    } else {
-        ; Use the selected text for translation
-        state.currentText := A_Clipboard
     }
 
     state.currentText := IgnoreCharacters(state.currentText)
@@ -156,15 +168,13 @@ ReadText(language) {
         state.isReading := true
         ; Enable hotkeys when reading starts
         UpdateHotkeys(true)
-        voice.Speak(state.currentText, 1) ; Asynchronous reading
+        voice.Speak(state.currentText, 1)  ; Asynchronous reading
 
         ; Monitor reading status
         SetTimer(CheckReadingStatus, 100)
     } catch as err {
-        MsgBox "Error while using text-to-speech: " . err.Message
+        MsgBox "Error using text-to-speech: " . err.Message
         ResetState()
-    } finally {
-        A_Clipboard := OldClipboard
     }
 }
 
