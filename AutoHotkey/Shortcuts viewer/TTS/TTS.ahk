@@ -320,7 +320,7 @@ HasVal(haystack, needle) {
 
 IgnoreCharacters(text) {
     ; Removes specific characters from text
-    charactersToIgnore := ["*", "#", "@", "//"]
+    charactersToIgnore := ["*", " #", "##", "# ", "\n#", "@", "//", "/"]
     for char in charactersToIgnore {
         text := StrReplace(text, char, "")
     }

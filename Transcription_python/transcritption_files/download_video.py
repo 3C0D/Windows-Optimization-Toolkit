@@ -2,6 +2,10 @@ import sys
 import subprocess
 import importlib.metadata
 import os
+import re
+import time
+import json
+import requests
 
 
 def read_requirements(file_path):
@@ -14,7 +18,6 @@ def read_requirements(file_path):
                 package_name = line.split("==")[0].split("<")[0].split(">")[0].strip()
                 required_packages.add(package_name.lower())
     return required_packages
-
 
 def install_modules(venv_path, requirements_file):
     """Installer les modules requis dans l'environnement virtuel"""
@@ -57,16 +60,70 @@ except Exception as e:
 # Importer les modules nécessaires
 try:
     import pyperclip # type: ignore
-    import json
     import yt_dlp # type: ignore
-    import re
     from bs4 import BeautifulSoup # type: ignore
-    import requests # type: ignore
+    from tqdm import tqdm # type: ignore
 
 except ImportError as e:
     print(f"Erreur lors de l'importation des modules : {e}")
     print("Assurez-vous que tous les modules sont installés et essayez à nouveau.")
     sys.exit(1)
+    
+def select_video_quality(available_formats):
+    """
+    Sélectionne le meilleur format vidéo disponible selon les préférences:
+    1. 1080p (1920x1080)
+    2. 720p (1280x720)
+    3. 480p (854x480)
+    4. Meilleure qualité disponible si aucune des préférées n'est trouvée
+    """
+    preferred_heights = [1080, 720, 480]
+    
+    # Filtrer les formats qui contiennent de la vidéo (pas seulement audio)
+    video_formats = [f for f in available_formats if f.get('vcodec') != 'none']
+    
+    # Grouper les formats par hauteur
+    formats_by_height = {}
+    for fmt in video_formats:
+        height = fmt.get('height', 0)
+        if height not in formats_by_height:
+            formats_by_height[height] = []
+        formats_by_height[height].append(fmt)
+    
+    # Chercher la meilleure qualité disponible parmi les préférées
+    for preferred_height in preferred_heights:
+        if preferred_height in formats_by_height:
+            formats = formats_by_height[preferred_height]
+            # Prendre le format avec le meilleur bitrate pour cette résolution
+            best_format = max(formats, key=lambda x: x.get('vbr', 0) or 0)
+            return best_format['format_id'], preferred_height
+    
+    # Si aucune qualité préférée n'est disponible, prendre la meilleure disponible
+    available_heights = sorted(formats_by_height.keys(), reverse=True)
+    if available_heights:
+        height = available_heights[0]
+        formats = formats_by_height[height]
+        best_format = max(formats, key=lambda x: x.get('vbr', 0) or 0)
+        return best_format['format_id'], height
+    
+    return None, None
+
+def modify_youtube_options(ydl_opts):
+    """
+    Modifie les options yt-dlp pour sélectionner la qualité vidéo appropriée
+    """
+    def format_selector(ctx):
+        formats = ctx.get('formats', [])
+        format_id, height = select_video_quality(formats)
+        
+        if format_id:
+            print(f"Qualité vidéo sélectionnée : {height}p")
+            # Sélectionner le meilleur format audio
+            return f"{format_id}+bestaudio"
+        return 'best'  # Fallback to best available
+    
+    ydl_opts['format'] = format_selector
+    return ydl_opts
 
 
 def is_valid_youtube_url(url):
@@ -77,75 +134,68 @@ def is_valid_youtube_url(url):
     )
     return bool(re.match(youtube_regex, url))
 
-
 def is_valid_odysee_url(url):
     odysee_regex = r"https?://odysee\.com/([a-zA-Z0-9\-_@:]+)"
     return bool(re.match(odysee_regex, url))
 
+def is_valid_url(url):
+    """Vérifie si la chaîne est une URL valide"""
+    url_regex = r"^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$"
+    return bool(re.match(url_regex, url))
 
 def get_url_from_clipboard():
+    """Récupère et valide l'URL depuis le presse-papier"""
     print("\nRécupération de l'URL depuis le presse-papier...")
     url = pyperclip.paste()
+    
     if not url:
         print("Le presse-papier est vide.")
         return None
-    if is_valid_youtube_url(url) or is_valid_odysee_url(url):
-        print("URL valide trouvée.")
-        return url
-    print("L'URL dans le presse-papier n'est pas une URL YouTube ou Odysee valide.")
-    return None
-
-
-def get_video_id(url):
-    """Extraire l'ID de la vidéo depuis l'URL"""
-    print("\nExtraction de l'ID de la vidéo...")
+        
+    if not is_valid_url(url):
+        print("Le contenu du presse-papier n'est pas une URL valide.")
+        return None
+        
     if is_valid_youtube_url(url):
-        video_id = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", url)
-        return video_id.group(1) if video_id else None
-    if is_valid_odysee_url(url):
-        response = requests.get(url)
-        soup = BeautifulSoup(response.content, "html.parser")
-        return soup.find("title").text
-    print("Impossible d'extraire l'ID de la vidéo.")
-    return None
-
-
+        print("URL YouTube valide trouvée.")
+        return ("youtube", url)
+    elif is_valid_odysee_url(url):
+        print("URL Odysee valide trouvée.")
+        return ("odysee", url)
+    else:
+        print("URL générique trouvée.")
+        return ("generic", url)
+    
 def download_youtube_video(url):
     print("\nTéléchargement de la vidéo YouTube...")
     local_path = r"C:\Users\dd200\Downloads\Video\Youtube"
+    
     ydl_opts = {
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "outtmpl": os.path.join(local_path, "%(title)s.%(ext)s"),
-        "ffmpeg_location": r"C:\ffmpeg\bin\ffmpeg.exe",
-        # "noplaylist": True,  # Ajouté pour éviter le téléchargement de playlists
+        'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',  # Limite à 1080p max
+        'outtmpl': os.path.join(local_path, '%(title)s.%(ext)s'),
+        'ffmpeg_location': r'C:\ffmpeg\bin\ffmpeg.exe',
+        'merge_output_format': 'mp4'
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Extract info
-            info_dict = ydl.extract_info(url, download=False)
-            video_title = info_dict.get("title", None)
-            video_ext = info_dict.get("ext", "mp4")
-            expected_filename = f"{video_title}.{video_ext}"
-            expected_filepath = os.path.join(local_path, expected_filename)
-
-            # Étape 2 : Vérifier si le fichier existe déjà
-            if os.path.exists(expected_filepath):
-                print(
-                    f"Le fichier '{expected_filename}' existe déjà dans '{local_path}'. Téléchargement ignoré."
-                )
+            # Vérifier si le fichier existe déjà
+            info = ydl.extract_info(url, download=False)
+            video_title = info.get('title', 'video')
+            filename = f"{video_title}.mp4"
+            filepath = os.path.join(local_path, filename)
+            
+            if os.path.exists(filepath):
+                print(f"Le fichier '{filename}' existe déjà dans '{local_path}'. Téléchargement ignoré.")
                 return
-
-            # Étape 3 : Télécharger la vidéo si le fichier n'existe pas
+                
+            # Télécharger la vidéo
             ydl.download([url])
-            print("Téléchargement terminé.")
-            return
-
+            print("Téléchargement terminé avec succès.")
+            
     except Exception as e:
         print(f"Erreur lors du téléchargement : {str(e)}")
         return
-
-
 def download_odysee_video(url):
     print("\nTéléchargement de la vidéo Odysee...")
     response = requests.get(url)
@@ -182,36 +232,153 @@ def download_odysee_video(url):
     except Exception as e:
         print(f"Erreur lors du téléchargement : {str(e)}")
 
+def download_generic_video(url):
+    """Télécharge une vidéo depuis une URL générique"""
+    print("\nTéléchargement de la vidéo depuis une URL générique...")
+    local_path = r"C:\Users\dd200\Downloads\Video\Generic"
+    os.makedirs(local_path, exist_ok=True)  # Crée le dossier s'il n'existe pas
+    
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36'
+        }
+        
+        response = requests.get(url, headers=headers)
+        soup = BeautifulSoup(response.content, "html.parser")
+        
+        title = soup.find("title")
+        video_name = (title.text if title else "video") + ".mp4"
+        video_name = re.sub(r'[<>:"/\\|?*]', '_', video_name)
+        video_path = os.path.join(local_path, video_name)
+        
+        if os.path.exists(video_path):
+            try:
+                os.remove(video_path)
+                print(f"Fichier existant supprimé: {video_name}")
+            except Exception as e:
+                print(f"Impossible de supprimer le fichier existant: {e}")
+                return
+
+        # Chercher toutes les sources vidéo possibles
+        video_sources = []
+        
+        # Chercher dans les balises JSON-LD
+        script_tags = soup.find_all("script", type="application/ld+json")
+        for script in script_tags:
+            try:
+                json_content = json.loads(script.string)
+                if isinstance(json_content, dict):
+                    if "contentUrl" in json_content:
+                        video_sources.append({"url": json_content["contentUrl"], "quality": "unknown"})
+                    if "encodingFormat" in json_content:
+                        for format_info in json_content.get("encodingFormat", []):
+                            if isinstance(format_info, dict):
+                                url = format_info.get("contentUrl")
+                                quality = format_info.get("quality", "unknown")
+                                if url:
+                                    video_sources.append({"url": url, "quality": quality})
+            except:
+                continue
+
+        # Chercher dans les balises vidéo et source
+        video_tag = soup.find("video")
+        if video_tag:
+            src = video_tag.get("src")
+            if src:
+                video_sources.append({"url": src, "quality": "unknown"})
+            
+            source_tags = video_tag.find_all("source")
+            for source in source_tags:
+                src = source.get("src")
+                if src:
+                    quality = source.get("size", "unknown")
+                    video_sources.append({"url": src, "quality": quality})
+
+        if not video_sources:
+            print("Aucune source vidéo trouvée dans la page.")
+            return
+
+        # Sélectionner la meilleure qualité disponible
+        preferred_qualities = ["1080", "720", "480"]
+        selected_url = None
+        selected_quality = None
+
+        for preferred_quality in preferred_qualities:
+            for source in video_sources:
+                if str(preferred_quality) in str(source["quality"]):
+                    selected_url = source["url"]
+                    selected_quality = preferred_quality
+                    break
+            if selected_url:
+                break
+
+        if not selected_url:
+            selected_url = video_sources[0]["url"]
+            selected_quality = "meilleure disponible"
+
+        print(f"Téléchargement en qualité {selected_quality}...")
+        
+        response = requests.get(selected_url, headers=headers, stream=True)
+        total_size = int(response.headers.get('content-length', 0))
+        
+        block_size = 1024 * 1024  # 1 MB
+        
+        with open(video_path, 'wb') as f:
+            try:
+                with tqdm(total=total_size, unit='B', unit_scale=True, desc=video_name) as pbar:
+                    start_time = time.time()
+                    bytes_downloaded = 0
+                    
+                    for data in response.iter_content(block_size):
+                        if not data:
+                            break
+                        f.write(data)
+                        bytes_downloaded += len(data)
+                        pbar.update(len(data))
+                        
+                        elapsed_time = time.time() - start_time
+                        if elapsed_time > 0:
+                            speed = bytes_downloaded / (1024 * 1024 * elapsed_time)  # MB/s
+                            pbar.set_postfix(speed=f"{speed:.2f} MB/s")
+
+                print(f"\nTéléchargement terminé : {video_name}")
+                print(f"Taille : {total_size / (1024*1024):.2f} MB")
+                print(f"Temps total : {time.time() - start_time:.2f} secondes")
+                
+            except Exception as e:
+                print(f"Erreur pendant le téléchargement : {e}")
+                # Supprime le fichier partiellement téléchargé en cas d'erreur
+                if os.path.exists(video_path):
+                    os.remove(video_path)
+                raise
+
+    except Exception as e:
+        print(f"Erreur lors du téléchargement générique : {str(e)}")
+        # Nettoyer en cas d'erreur
+        if os.path.exists(video_path):
+            os.remove(video_path)
 
 def main():
     print("\n===== Début du processus =====\n")
 
-    url = get_url_from_clipboard()
-    if not url:
+    result = get_url_from_clipboard()
+    if not result:
         return
 
-    video_id = get_video_id(url)
-    if not video_id:
-        print("Impossible d'extraire l'ID de la vidéo.")
-        return
-
+    type_url, url = result
     print(f"\nTraitement de la vidéo depuis l'URL : {url}")
 
-    if "youtube.com" in url:
-        try:
+    try:
+        if type_url == "youtube":
             download_youtube_video(url)
-        except Exception as e:
-            print(f"Erreur lors du téléchargement de la video YouTube : {e}")
-            return
-    elif "odysee.com" in url:
-        try:
+        elif type_url == "odysee":
             download_odysee_video(url)
-        except Exception as e:
-            print(f"Erreur lors du téléchargement de la video Odysee : {e}")
-            return
+        else:
+            download_generic_video(url)
+    except Exception as e:
+        print(f"Erreur lors du téléchargement : {e}")
 
     print("\n===== Processus terminé =====")
-
 
 if __name__ == "__main__":
     main()
