@@ -108,24 +108,6 @@ def select_video_quality(available_formats):
     
     return None, None
 
-def modify_youtube_options(ydl_opts):
-    """
-    Modifie les options yt-dlp pour sélectionner la qualité vidéo appropriée
-    """
-    def format_selector(ctx):
-        formats = ctx.get('formats', [])
-        format_id, height = select_video_quality(formats)
-        
-        if format_id:
-            print(f"Qualité vidéo sélectionnée : {height}p")
-            # Sélectionner le meilleur format audio
-            return f"{format_id}+bestaudio"
-        return 'best'  # Fallback to best available
-    
-    ydl_opts['format'] = format_selector
-    return ydl_opts
-
-
 def is_valid_youtube_url(url):
     youtube_regex = (
         r"(https?://)?(www\.)?"
@@ -171,10 +153,29 @@ def download_youtube_video(url):
     local_path = r"C:\Users\dd200\Downloads\Video\Youtube"
     
     ydl_opts = {
-        'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',  # Limite à 1080p max
+        'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
         'outtmpl': os.path.join(local_path, '%(title)s.%(ext)s'),
         'ffmpeg_location': r'C:\ffmpeg\bin\ffmpeg.exe',
-        'merge_output_format': 'mp4'
+        'merge_output_format': 'mp4',
+        'noplaylist': True,
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'http_headers': {
+            'Accept': '*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Origin': 'https://www.youtube.com',
+            'Referer': 'https://www.youtube.com/',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-Dest': 'empty',
+            'Connection': 'keep-alive',
+        },
+        'nocheckcertificate': True,
+        'ignoreerrors': False,
+        'quiet': False,
+        'no_warnings': False,
+        'extractor_retries': 3,
+        'socket_timeout': 30
     }
 
     try:

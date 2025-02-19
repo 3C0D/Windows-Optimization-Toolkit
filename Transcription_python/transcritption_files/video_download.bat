@@ -13,13 +13,11 @@ if not exist "%VENV_PATH%" (
 :: Activate the virtual environment
 call "%VENV_PATH%\Scripts\activate"
 
-:: Upgrade pip and install/update dependencies
-@REM pip install --upgrade pip setuptools wheel
-@REM pip install -r "%~dp0requirements.txt"
+:: Update yt-dlp to latest version
+python -m pip install --upgrade yt-dlp
 
 :: Run the Python script
 python "%~dp0download_video.py"
-
 
 :: Pause to view results
 pause

@@ -161,41 +161,49 @@ def download_youtube_audio(url):
     os.makedirs(local_path, exist_ok=True)
 
     try:
-        # Première étape : extraire les informations de la vidéo pour vérifier si le fichier existe déjà
-        with yt_dlp.YoutubeDL() as ydl:
+        # Configuration des options de téléchargement avec les nouveaux paramètres anti-bot
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'outtmpl': os.path.join(local_path, '%(title)s.%(ext)s'),
+            'ffmpeg_location': r'C:\ffmpeg\bin\ffmpeg.exe',
+            'noplaylist': True,
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'http_headers': {
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Origin': 'https://www.youtube.com',
+                'Referer': 'https://www.youtube.com/',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-origin',
+                'Sec-Fetch-Dest': 'empty',
+                'Connection': 'keep-alive',
+            },
+            'nocheckcertificate': True,
+            'ignoreerrors': False,
+            'quiet': False,
+            'no_warnings': False,
+            'extractor_retries': 3,
+            'socket_timeout': 30
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Vérification du fichier existant
             info = ydl.extract_info(url, download=False)
             audio_title = info.get('title', 'audio')
             expected_filename = f"{audio_title}.mp3"
             expected_filepath = os.path.join(local_path, expected_filename)
 
             if os.path.exists(expected_filepath):
-                print(
-                    f"Le fichier audio '{expected_filename}' existe déjà dans '{local_path}'. Extraction ignorée."
-                )
+                print(f"Le fichier audio '{expected_filename}' existe déjà dans '{local_path}'. Extraction ignorée.")
                 return
 
-            # Sélectionner le format approprié
-            format_id, height = select_video_quality(info['formats'])
-            if format_id:
-                print(f"Qualité vidéo sélectionnée pour extraction audio : {height}p")
-                format_spec = f"{format_id}+bestaudio/bestaudio/best"
-            else:
-                format_spec = "bestaudio/best"
-
-            # Configuration des options de téléchargement
-            ydl_opts = {
-                'format': format_spec,
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                }],
-                'outtmpl': os.path.join(local_path, '%(title)s.%(ext)s'),
-                'ffmpeg_location': r'C:\ffmpeg\bin\ffmpeg.exe'
-            }
-
-            # Télécharger avec les options configurées
-            ydl = yt_dlp.YoutubeDL(ydl_opts)
+            # Téléchargement avec les options configurées
             ydl.download([url])
             print("Extraction audio terminée.")
 
