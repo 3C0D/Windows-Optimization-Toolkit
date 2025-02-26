@@ -1,24 +1,7 @@
 #Requires AutoHotkey v2.0
 
-; Open text in AI chat (Win+Shift+I)
-#+i:: openInAI()
-
-; Open any link in browser (Win+Shift+O)
-#+o:: openInBrowser()
-
-openInAI() {
-    ; Create AI menu
-    aiMenu := Menu()
-    aiMenu.Add("DeepSeek", (*) => Run("https://chat.deepseek.com/a/chat"))
-    aiMenu.Add("Claude", (*) => Run("https://claude.ai"))
-    aiMenu.Add("ChatGPT", (*) => Run("https://chatgpt.com/"))
-    aiMenu.Add("Grok", (*) => Run("https://x.com/i/grok"))
-    
-    ; Show menu at cursor position
-    aiMenu.Show()
-}
-
-openInBrowser() {
+; Helper function for clipboard operations
+getSelectedOrClipboardText() {
     OldClipboard := A_Clipboard
     A_Clipboard := ""
 
@@ -26,23 +9,44 @@ openInBrowser() {
     if !ClipWait(0.5) {
         ; If no selection, restore the clipboard and use it
         if (OldClipboard != "") {
-            SelectedText := OldClipboard
+            text := OldClipboard
             A_Clipboard := OldClipboard
+            return text
         } else {
             MsgBox "No text selected or in the clipboard"
-            return
+            return ""
         }
     } else {
         ; Use the selected text
-        SelectedText := A_Clipboard
+        text := A_Clipboard
+        A_Clipboard := OldClipboard
+        return text
     }
-
-    if (SelectedText != "") {
-        ; Add https:// if not present
-        if !RegExMatch(SelectedText, "^(https?://|www\.)")
-            SelectedText := "https://" . SelectedText
-            
-        Run(SelectedText)
-    }
-    A_Clipboard := OldClipboard
 }
+
+; openInAI remains unchanged as it doesn't use clipboard
+openInAI() {
+    aiMenu := Menu()
+    aiMenu.Add("DeepSeek", (*) => Run("https://chat.deepseek.com/a/chat"))
+    aiMenu.Add("Claude", (*) => Run("https://claude.ai"))
+    aiMenu.Add("ChatGPT", (*) => Run("https://chatgpt.com/"))
+    aiMenu.Add("Grok", (*) => Run("https://x.com/i/grok"))
+    
+    aiMenu.Show()
+}
+
+; Universal URL/Search handler
+openUrlOrSearch() {
+    SelectedText := getSelectedOrClipboardText()
+    if (SelectedText != "") {
+        ; If it looks like a URL, open directly, otherwise search
+        if RegExMatch(SelectedText, "^(https?://|www\.)")
+            Run(SelectedText)
+        else
+            Run("https://www.google.com/search?q=" SelectedText)
+    }
+}
+
+; Hotkey definitions
+#+i:: openInAI()
+#+u:: openUrlOrSearch()

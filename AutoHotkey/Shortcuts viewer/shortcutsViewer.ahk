@@ -1,10 +1,9 @@
 #Requires AutoHotkey v2.0
 ;https://github.com/TheArkive/JXON_ahk2
 #Include JXON.ahk
-#Include Personal_shortcuts/personalShortcuts.ahk
+#Include Browser_shortcuts/browserShortcuts.ahk
 #Include Translate_in_browser/translateInBrowser.ahk
 #Include TTS/TTS.ahk
-#Include Browser_shortcuts/browserShortcuts.ahk
 
 ; Chemin vers le fichier JSON
 filePath := A_ScriptDir "\shortcuts.json"
