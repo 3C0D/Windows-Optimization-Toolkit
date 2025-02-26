@@ -4,6 +4,7 @@
 #Include Personal_shortcuts/personalShortcuts.ahk
 #Include Translate_in_browser/translateInBrowser.ahk
 #Include TTS/TTS.ahk
+#Include Browser_shortcuts/browserShortcuts.ahk
 
 ; Chemin vers le fichier JSON
 filePath := A_ScriptDir "\shortcuts.json"
