@@ -1,40 +1,71 @@
 ﻿#Requires AutoHotkey v2.0
 
 InitializeVoices() {
-    ; Skip voice copying if we don't have admin rights
-    if !A_IsAdmin {
-        ; MsgBox "Running without admin rights - skipping voice copying"
-        return
-    }
-
-    ; Registry source path for voices
+    ; First check if voices are missing without admin rights
     sourcePath := "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"
-
-    ; Registry destination paths
     destinationPaths := [
         "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens",
         "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\SPEECH\Voices\Tokens"
     ]
 
-    ; Copy voices from source path to destination paths
+    ; Check for missing voices in registry
+    missingVoices := false
+    try {
+        loop reg, sourcePath, "K" {
+            sourceKey := A_LoopRegKey "\" A_LoopRegName
+            for destPath in destinationPaths {
+                destKey := destPath "\" A_LoopRegName
+                if !RegRead(destKey) {
+                    missingVoices := true
+                    break 2
+                }
+            }
+        }
+    }
+
+    ; Exit if no voices need to be installed
+    if (!missingVoices)
+        return
+
+    ; Request admin rights if needed
+    if !A_IsAdmin {
+        MsgBox "Additional voices available. The script will restart with administrator rights to install them."
+        try {
+            if A_IsCompiled
+                Run '*RunAs "' A_ScriptFullPath '" /restart'
+            else
+                Run '*RunAs "' A_AhkPath '" /restart "' A_ScriptFullPath '"'
+            ExitApp
+        }
+        catch {
+            MsgBox "Could not obtain administrator rights. Some voices may not be available."
+            return
+        }
+    }
+
+    ; Copy registry keys and update voices
     try {
         for destPath in destinationPaths {
             loop reg, sourcePath, "K" {
                 sourceKey := A_LoopRegKey "\" A_LoopRegName
                 destKey := destPath "\" A_LoopRegName
-                ; Create destination key if it doesn't exist
                 if !RegRead(destKey)
                     RegCreateKey(destKey)
-
-                ; Copy values
                 loop reg, sourceKey, "V" {
                     RegWrite(RegRead(sourceKey, A_LoopRegName), "REG_SZ", destKey, A_LoopRegName)
                 }
             }
         }
-        MsgBox "Voice copying completed successfully."
-    } catch as err {
-        MsgBox "Error while copying voices: " . err.Message
+
+        ; Restart audio service to apply changes
+        RunWait "net stop Audiosrv", , "Hide"
+        RunWait "net start Audiosrv", , "Hide"
+
+        ; Just reload without message
+        Reload
+    }
+    catch as err {
+        MsgBox "Error updating voices: " err.Message
     }
 }
 
