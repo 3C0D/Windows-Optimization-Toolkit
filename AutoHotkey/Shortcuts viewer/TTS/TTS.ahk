@@ -78,7 +78,8 @@ global state := {
     isPaused: false,
     speed: 2.0,  ; Speed for display
     internalRate: 2, ; Integer speed for SAPI
-    currentText: ""   ; Current text being read
+    currentText: "",   ; Current text being read
+    volume: 100      ; Volume level (0-100)
 }
 
 global voice := ComObject("SAPI.SpVoice")
@@ -88,15 +89,21 @@ UpdateHotkeys(enable := true) {
     if (enable) {
         Hotkey "NumpadAdd", "On"
         Hotkey "NumpadSub", "On"
+        Hotkey "NumpadMult", "On"      ; Volume Up
+        Hotkey "NumpadDiv", "On"       ; Volume Down
     } else {
         Hotkey "NumpadAdd", "Off"
         Hotkey "NumpadSub", "Off"
+        Hotkey "NumpadMult", "Off"     ; Volume Up
+        Hotkey "NumpadDiv", "Off"      ; Volume Down
     }
 }
 
 ; Initialize hotkeys
 Hotkey "NumpadAdd", AdjustSpeedUp
 Hotkey "NumpadSub", AdjustSpeedDown
+Hotkey "NumpadMult", VolumeUp
+Hotkey "NumpadDiv", VolumeDown
 ; Disable hotkeys at start
 UpdateHotkeys(false)
 
@@ -356,4 +363,47 @@ IgnoreCharacters(text) {
         text := StrReplace(text, char, "")
     }
     return text
+}
+
+VolumeUp(*) {
+    if (state.volume < 100) {
+        state.volume += 10
+        voice.Volume := state.volume
+        ShowVolumeWindow()
+    }
+}
+
+VolumeDown(*) {
+    if (state.volume > 0) {
+        state.volume -= 10
+        voice.Volume := state.volume
+        ShowVolumeWindow()
+    }
+}
+
+ShowVolumeWindow() {
+    static volumeGui := false
+
+    ; Destroy existing window if present
+    if (volumeGui) {
+        volumeGui.Destroy()
+    }
+
+    ; Create a new window
+    volumeGui := Gui("+AlwaysOnTop -Caption +ToolWindow")
+    volumeGui.SetFont("s12", "Arial")
+    volumeGui.Add("Text", , "Volume: " . state.volume . "%")
+    
+    ; Position the window
+    screenWidth := A_ScreenWidth
+    screenHeight := A_ScreenHeight
+    guiWidth := 150
+    guiHeight := 40
+    xPos := (screenWidth - guiWidth) / 2
+    yPos := screenHeight - 100
+
+    volumeGui.Show("x" . xPos . " y" . yPos . " w" . guiWidth . " h" . guiHeight)
+
+    ; Close the window after 2 seconds
+    SetTimer () => volumeGui.Destroy(), -2000
 }
