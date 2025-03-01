@@ -73,6 +73,7 @@ InitializeVoices() {
 ; InitializeVoices()
 
 ; Global variables
+global APP_VERSION := "1.0.0"
 global state := {
     isReading: false,
     isPaused: false,
@@ -84,6 +85,92 @@ global state := {
 }
 
 global voice := ComObject("SAPI.SpVoice")
+
+; Create tray icon - only needed if not compiled with an icon
+if (!A_IsCompiled)
+    TraySetIcon(A_ScriptDir "\TTS.ico", , true)
+
+A_TrayMenu.Delete()  ; Remove default options
+A_TrayMenu.Add("TTS Reader v" . APP_VERSION, (*) => ShowHelp())
+A_TrayMenu.Add()  ; Separator
+A_TrayMenu.Add("Shortcuts...", (*) => ShowHelp())
+A_TrayMenu.Add()  ; Separator
+A_TrayMenu.Add("Run at startup", ToggleStartup)
+A_TrayMenu.Add()  ; Separator
+A_TrayMenu.Add("Exit", (*) => ExitApp())
+A_TrayMenu.Default := "Shortcuts..."
+
+; Check if already set to run at startup and update menu
+startupPath := A_Startup "\TTS Reader.lnk"
+if FileExist(startupPath)
+    A_TrayMenu.Check("Run at startup")
+
+; Function to toggle startup status
+ToggleStartup(*) {
+    startupPath := A_Startup "\TTS Reader.lnk"
+    
+    if FileExist(startupPath) {
+        ; Remove from startup
+        try {
+            FileDelete(startupPath)
+            A_TrayMenu.Uncheck("Run at startup")
+        } catch as err {
+            MsgBox("Error removing startup shortcut: " . err.Message)
+        }
+    } else {
+        ; Add to startup
+        try {
+            if A_IsCompiled {
+                FileCreateShortcut(A_ScriptFullPath, startupPath, A_WorkingDir)
+            } else {
+                FileCreateShortcut(A_AhkPath, startupPath, A_WorkingDir, '"' . A_ScriptFullPath . '"')
+            }
+            A_TrayMenu.Check("Run at startup")
+        } catch as err {
+            MsgBox("Error creating startup shortcut: " . err.Message)
+        }
+    }
+}
+; A_TrayMenu.Add("Play/Stop (Win+Y)", (*) => ReadText("AUTO"))
+A_TrayMenu.Add()  ; Separator
+A_TrayMenu.Add("Exit", (*) => ExitApp())
+A_TrayMenu.Default := "Shortcuts..."
+
+; Function to display shortcuts help
+ShowHelp(*) {
+    helpText := "
+    (    
+    MAIN SHORTCUTS:
+    Win+Y : Play/Stop selected text
+    Win+Alt+Y : Pause/Resume reading
+    
+    NAVIGATION:
+    Win+Ctrl+Y : Skip to next paragraph
+    Win+Shift+Y : Go to previous paragraph
+    
+    SPEED:
+    Numpad+ : Increase speed
+    Numpad- : Decrease speed
+    
+    VOLUME:
+    Numpad* : Increase volume
+    Numpad/ : Decrease volume
+    
+    === How to use ===
+    1. Select or copy text in any application
+    2. Press Win+Y to start reading
+    3. Use the shortcuts above to control playback
+    
+    Language is automatically detected (English or French).
+    )"
+    
+    helpGui := Gui("+AlwaysOnTop")
+    helpGui.Title := "Shortcuts"
+    helpGui.SetFont("s10", "Segoe UI")
+    helpGui.Add("Text", "w500", helpText)
+    helpGui.Add("Button", "Default w100", "OK").OnEvent("Click", (*) => helpGui.Destroy())
+    helpGui.Show()
+}
 
 ; Manage hotkeys
 UpdateHotkeys(enable := true) {
@@ -288,6 +375,30 @@ AdjustSpeedDown(*) {
     AdjustSpeed(-0.5)
 }
 
+; Helper function for clipboard operations (we copy it there again needed for compilation .exe)
+getSelOrCbText() {
+    OldClipboard := A_Clipboard
+    A_Clipboard := ""
+
+    Send "^c" ; Copy the selected text
+    if !ClipWait(0.5) {
+        ; If no selection, restore the clipboard and use it
+        if (OldClipboard != "") {
+            text := OldClipboard
+            A_Clipboard := OldClipboard
+            return text
+        } else {
+            MsgBox "No text selected or in the clipboard"
+            return ""
+        }
+    } else {
+        ; Use the selected text
+        text := A_Clipboard
+        A_Clipboard := OldClipboard
+        return text
+    }
+}
+
 
 ReadText(language) {
     if (voice.Status.RunningState == 2 || state.isPaused) {
@@ -297,7 +408,7 @@ ReadText(language) {
 
     ResetState()
 
-    text := getSelectedOrClipboardText()  ; importée depuis browserShortcuts.ahk 
+    text := getSelOrCbText()  ; importée depuis browserShortcuts.ahk 
     if (text == "")
         return
         
