@@ -31,6 +31,10 @@ openInAI() {
     aiMenu.Add("Claude", (*) => Run("https://claude.ai"))
     aiMenu.Add("ChatGPT", (*) => Run("https://chatgpt.com/"))
     aiMenu.Add("Grok", (*) => Run("https://x.com/i/grok"))
+    aiMenu.Add("Perplexity", (*) => Run("https://www.perplexity.ai/"))
+    aiMenu.Add("Qwen", (*) => Run("https://chat.qwenlm.ai/"))
+    aiMenu.Add("Nexus Mind", (*) => Run("https://www.nexusmind.tech/home"))
+    aiMenu.Add("Google AI", (*) => Run("https://aistudio.google.com/prompts/new_chat"))
     
     aiMenu.Show()
 }

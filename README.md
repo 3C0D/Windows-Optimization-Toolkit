@@ -21,11 +21,30 @@ You can see them at the top of the file. edit it if needed.
 #### Text-to-Speech (ahk)
 
 `Win+Y`: Start/Stop TTS on Selection or Clipboard, anywhere in Windows. I'm using a French(Microsoft Paul) and English(Microsoft Mark) voice in the script.   
-`Alt+Win+Y`: Pause/Resume. 
-`Ctrl+Win+Y`: Jump to next line. 
+`Win+Alt+Y`: Pause/Resume reading.
+`Win+Ctrl+Y`: Jump to next line.
+`Win+Shift+Y`: Jump to previous paragraph (press multiple times within 3 seconds to navigate between paragraphs).
 `Numpad +/-`: Increase/Decrease speed (when reading).
+`Numpad *`: Increase volume.
+`Numpad /`: Decrease volume.
+
 N.B: the script is normally registering missing voices in registry. For instance Paul by default is not registered.  
 you can double click `AutoHotkey\Shortcuts viewer\TTS\seeInstalledVoices.ahk` to see your installed voices.
+
+##### Obsidian TTS Plugin
+
+The TTS functionality now includes integration with OpenAI's text-to-speech API. Features include:
+
+- Multiple voice options (Alloy, Echo, Fable, Onyx, Nova, Shimmer)
+- Playback controls (play, pause, resume, stop)
+- Language detection and voice selection
+- Customizable settings for volume, rate, and pitch
+- Support for reading various content types (frontmatter, links, codeblocks, etc.)
+
+To use OpenAI TTS, you'll need to:
+1. Configure your OpenAI API key in the plugin settings
+2. Select your preferred voice
+3. Use the TTS commands or menu options to start playback
   
 #### Translate in Browser (ahk)
 
@@ -63,6 +82,13 @@ How to change the model: In the code of the file transcription_script.py, replac
 
     Lightweight models (Tiny, Base) : Ideal for machines with little RAM.
     Larger models (Small, Medium, Large) : Offer better accuracy, but require more RAM and, ideally, a GPU.
+
+### Language Detection and Translation
+
+The transcription system now includes automatic language detection and translation capabilities:
+- Detects the source language of transcribed content
+- Translates content between languages (primarily focused on English and French)
+- Handles large texts by splitting into manageable chunks
 
 The text files *.txt are saved in the folder `Transcription_python`. Use the reader in the folder Liseuse_HTML_de_txt for a more readable version. ↓↓
 
