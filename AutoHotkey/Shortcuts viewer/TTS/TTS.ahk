@@ -79,6 +79,7 @@ global state := {
     speed: 2.0,  ; Speed for display
     internalRate: 2, ; Integer speed for SAPI
     currentText: "",   ; Current text being read
+    originalText: "",  ; Original complete text
     volume: 100      ; Volume level (0-100)
 }
 
@@ -171,91 +172,114 @@ JumpToPreviousParagraph(*) {
     if (state.isPaused)
         return
 
-    text := state.currentText
-    currentPos := voice.Status.InputWordPosition
-    
     ; Static variables to track jumps and timing
     static lastJumpTime := 0
     static jumpCount := 0
-    static lastPosition := 0
     
     currentTime := A_TickCount
     
-    ; Detect paragraph and line beginnings
-    paragraphStarts := [1]
-    searchPos := 1
+    ; Calculate the actual position in the original text
+    currentPosInCurrent := voice.Status.InputWordPosition
+    currentTextStart := InStr(state.originalText, state.currentText)
+    currentPos := currentTextStart + currentPosInCurrent
     
-    ; Find all paragraph beginnings (double line breaks) and single line breaks
-    while (searchPos < StrLen(text)) {
-        ; First look for double line breaks (paragraphs)
-        foundPos := InStr(text, "`n`n", false, searchPos)
-        if (foundPos > 0) {
-            paragraphStarts.Push(foundPos + 2)
-            searchPos := foundPos + 2
-        } else {
-            ; If no double break, look for single line breaks
-            foundPos := InStr(text, "`n", false, searchPos)
-            if (foundPos > 0) {
-                paragraphStarts.Push(foundPos + 1)
-                searchPos := foundPos + 1
-            } else {
-                break
-            }
-        }
-    }
-    
-    ; Sort the starting positions (using the correct method for AHK v2)
-    ; Convert array to string for sorting
-    tempStr := ""
-    for i, val in paragraphStarts
-        tempStr .= val . "`n"
-    
-    ; Sort the string and convert back to array
-    paragraphStarts := []
-    Loop Parse, Sort(tempStr), "`n"
-    {
-        if (A_LoopField != "")
-            paragraphStarts.Push(Integer(A_LoopField))
-    }
-    
-    ; Find the index of the current paragraph
-    currentParagraphIndex := paragraphStarts.Length
-    for i, startPos in paragraphStarts {
-        if (startPos > currentPos) {
-            currentParagraphIndex := i - 1
-            break
-        }
-    }
-    
-    ; If we're at the same place as the last jump and within the time window
-    if (currentTime - lastJumpTime < 3000 && Abs(currentPos - lastPosition) < 50) {
+    ; Check if we're within the time window for multiple jumps
+    if (currentTime - lastJumpTime < 3000) {
         jumpCount++
     } else {
         jumpCount := 1
     }
     
-    ; Record the time and position of the jump
+    ; Record the time of this jump
     lastJumpTime := currentTime
-    lastPosition := currentPos
     
-    ; Calculate the target index by moving back jumpCount paragraphs
-    targetIndex := Max(1, currentParagraphIndex - jumpCount)
-    newPos := paragraphStarts[targetIndex]
+    ; Stop the current reading completely (necessary to reset SAPI state)
+    voice.Speak("", 3)  ; SVSFPurgeBeforeSpeak (stops immediately)
     
-    ; Stop the current reading
-    voice.Speak("", 3)
+    ; Calculate the new position in the original text
+    if (jumpCount == 1) {
+        ; For first jump, find the previous paragraph or line break
+        newPos := InStr(SubStr(state.originalText, 1, currentPos), "`n",, -1)
+        if (!newPos)
+            newPos := 1
+    } else {
+        ; For multiple jumps, look for double line breaks (paragraphs)
+        searchPos := currentPos
+        paragraphCount := 0
+        
+        while (searchPos > 1 && paragraphCount < jumpCount) {
+            ; Look for paragraph break
+            foundPos := InStr(SubStr(state.originalText, 1, searchPos), "`n`n",, -1)
+            if (foundPos) {
+                searchPos := foundPos - 1
+                paragraphCount++
+            } else {
+                ; If no more paragraph breaks found, go to beginning
+                searchPos := 1
+                break
+            }
+        }
+        
+        newPos := searchPos
+    }
     
-    ; Resume reading from the new position
-    remainingText := SubStr(text, newPos)
+    ; Create new text starting from the calculated position
+    remainingText := SubStr(state.originalText, newPos)
+    remainingText := RegExReplace(remainingText, "^[\r\n]+", "")
+    
     if (remainingText != "") {
+        ; Update current text and start new reading
         state.currentText := remainingText
         voice.Rate := state.internalRate
-        voice.Speak(remainingText, 1)
+        voice.Speak(remainingText, 1)  ; Start new asynchronous reading
     } else {
         StopReading()
     }
 }
 
+; Helper function to find paragraph boundaries in text
+FindParagraphBoundaries(text) {
+    boundaries := []
+    
+    ; Always include the start of the text
+    startPos := 1
+    
+    ; Scan through the text to find paragraph boundaries
+    searchPos := 1
+    textLength := StrLen(text)
+    
+    while (searchPos <= textLength) {
+        ; Look for paragraph breaks (double newlines)
+        paragraphBreak := InStr(text, "`n`n", false, searchPos)
+        
+        ; If no more paragraph breaks, the end of text is the last boundary
+        if (!paragraphBreak) {
+            ; Add the final paragraph
+            boundaries.Push({ start: startPos, end: textLength + 1 })
+            break
+        }
+        
+        ; Add this paragraph boundary
+        boundaries.Push({ start: startPos, end: paragraphBreak + 2 })
+        
+        ; Skip past any consecutive newlines
+        newPos := paragraphBreak + 2
+        while (SubStr(text, newPos, 1) == "`n" && newPos <= textLength) {
+            newPos++
+        }
+        
+        ; Start of next paragraph
+        startPos := newPos
+        searchPos := newPos
+    }
+    
+    ; If no paragraphs were found (no double newlines), treat the entire text as one paragraph
+    if (boundaries.Length == 0) {
+        boundaries.Push({ start: 1, end: textLength + 1 })
+    }
+    
+    return boundaries
+}
 AdjustSpeedUp(*) {
     AdjustSpeed(0.5)
 }
@@ -278,7 +302,9 @@ ReadText(language) {
         return
         
     state.currentText := text
+    state.originalText := text  ; Store the original text
     state.currentText := IgnoreCharacters(state.currentText)
+    state.originalText := IgnoreCharacters(state.originalText)
 
     try {
         SetVoiceLanguage(language, state.currentText)
