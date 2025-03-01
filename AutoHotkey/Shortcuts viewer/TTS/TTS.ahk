@@ -87,15 +87,27 @@ global voice := ComObject("SAPI.SpVoice")
 ; Manage hotkeys
 UpdateHotkeys(enable := true) {
     if (enable) {
+        ; Speed and volume controls
         Hotkey "NumpadAdd", "On"
         Hotkey "NumpadSub", "On"
         Hotkey "NumpadMult", "On"      ; Volume Up
         Hotkey "NumpadDiv", "On"       ; Volume Down
+        
+        ; Navigation and control hotkeys
+        Hotkey "#^y", "On"              ; Next line
+        Hotkey "#+y", "On"              ; Previous paragraph
+        Hotkey "#!y", "On"              ; Pause/Resume
     } else {
+        ; Speed and volume controls
         Hotkey "NumpadAdd", "Off"
         Hotkey "NumpadSub", "Off"
         Hotkey "NumpadMult", "Off"     ; Volume Up
         Hotkey "NumpadDiv", "Off"      ; Volume Down
+        
+        ; Navigation and control hotkeys
+        Hotkey "#^y", "Off"             ; Next line
+        Hotkey "#+y", "Off"             ; Previous paragraph
+        Hotkey "#!y", "Off"             ; Pause/Resume
     }
 }
 
@@ -104,6 +116,9 @@ Hotkey "NumpadAdd", AdjustSpeedUp
 Hotkey "NumpadSub", AdjustSpeedDown
 Hotkey "NumpadMult", VolumeUp
 Hotkey "NumpadDiv", VolumeDown
+Hotkey "#^y", JumpToNextLine
+Hotkey "#+y", JumpToPreviousParagraph
+Hotkey "#!y", TogglePause
 ; Disable hotkeys at start
 UpdateHotkeys(false)
 
@@ -111,11 +126,11 @@ UpdateHotkeys(false)
 #y:: ReadText("AUTO")
 
 ; Function to jump to the next line
-#^y:: {
-    ; Do nothing if reading is stopped or paused
-    if (!state.isReading || state.isPaused)
+JumpToNextLine(*) {
+    ; Do nothing if reading is paused
+    if (state.isPaused)
         return
-
+    
     ; Get the currently reading text
     text := state.currentText
 
@@ -151,6 +166,96 @@ UpdateHotkeys(false)
 ; pause/resume
 #!y:: TogglePause()
 
+; Function to jump to the previous paragraph
+JumpToPreviousParagraph(*) {
+    if (state.isPaused)
+        return
+
+    text := state.currentText
+    currentPos := voice.Status.InputWordPosition
+    
+    ; Static variables to track jumps and timing
+    static lastJumpTime := 0
+    static jumpCount := 0
+    static lastPosition := 0
+    
+    currentTime := A_TickCount
+    
+    ; Detect paragraph and line beginnings
+    paragraphStarts := [1]
+    searchPos := 1
+    
+    ; Find all paragraph beginnings (double line breaks) and single line breaks
+    while (searchPos < StrLen(text)) {
+        ; First look for double line breaks (paragraphs)
+        foundPos := InStr(text, "`n`n", false, searchPos)
+        if (foundPos > 0) {
+            paragraphStarts.Push(foundPos + 2)
+            searchPos := foundPos + 2
+        } else {
+            ; If no double break, look for single line breaks
+            foundPos := InStr(text, "`n", false, searchPos)
+            if (foundPos > 0) {
+                paragraphStarts.Push(foundPos + 1)
+                searchPos := foundPos + 1
+            } else {
+                break
+            }
+        }
+    }
+    
+    ; Sort the starting positions (using the correct method for AHK v2)
+    ; Convert array to string for sorting
+    tempStr := ""
+    for i, val in paragraphStarts
+        tempStr .= val . "`n"
+    
+    ; Sort the string and convert back to array
+    paragraphStarts := []
+    Loop Parse, Sort(tempStr), "`n"
+    {
+        if (A_LoopField != "")
+            paragraphStarts.Push(Integer(A_LoopField))
+    }
+    
+    ; Find the index of the current paragraph
+    currentParagraphIndex := paragraphStarts.Length
+    for i, startPos in paragraphStarts {
+        if (startPos > currentPos) {
+            currentParagraphIndex := i - 1
+            break
+        }
+    }
+    
+    ; If we're at the same place as the last jump and within the time window
+    if (currentTime - lastJumpTime < 3000 && Abs(currentPos - lastPosition) < 50) {
+        jumpCount++
+    } else {
+        jumpCount := 1
+    }
+    
+    ; Record the time and position of the jump
+    lastJumpTime := currentTime
+    lastPosition := currentPos
+    
+    ; Calculate the target index by moving back jumpCount paragraphs
+    targetIndex := Max(1, currentParagraphIndex - jumpCount)
+    newPos := paragraphStarts[targetIndex]
+    
+    ; Stop the current reading
+    voice.Speak("", 3)
+    
+    ; Resume reading from the new position
+    remainingText := SubStr(text, newPos)
+    if (remainingText != "") {
+        state.currentText := remainingText
+        voice.Rate := state.internalRate
+        voice.Speak(remainingText, 1)
+    } else {
+        StopReading()
+    }
+}
+
 AdjustSpeedUp(*) {
     AdjustSpeed(0.5)
 }
@@ -158,6 +263,7 @@ AdjustSpeedUp(*) {
 AdjustSpeedDown(*) {
     AdjustSpeed(-0.5)
 }
+
 
 ReadText(language) {
     if (voice.Status.RunningState == 2 || state.isPaused) {
@@ -167,36 +273,11 @@ ReadText(language) {
 
     ResetState()
 
-    OldClipboard := A_Clipboard
-    ; Attempt to retrieve the current selection
-    A_Clipboard := ""  ; Optional, to ensure the clipboard is empty before copying
-    Send "^c"  ; Copy the selection
-    if ClipWait(0.8) {
-        selectedText := A_Clipboard
-        if (Trim(selectedText) != "") {
-            ; A non-empty selection has been copied
-            state.currentText := selectedText
-            ; The clipboard already contains the selected text
-        } else {
-            ; The selection is empty, use the previous clipboard content if available
-            if (Trim(OldClipboard) != "") {
-                state.currentText := OldClipboard
-                A_Clipboard := OldClipboard
-            } else {
-                A_Clipboard := OldClipboard
-                return
-            }
-        }
-    } else {
-        ; No selection or ClipWait failed, use the previous clipboard content if available
-        if (Trim(OldClipboard) != "") {
-            state.currentText := OldClipboard
-            A_Clipboard := OldClipboard
-        } else {
-            return
-        }
-    }
-
+    text := getSelectedOrClipboardText()  ; importée depuis browserShortcuts.ahk 
+    if (text == "")
+        return
+        
+    state.currentText := text
     state.currentText := IgnoreCharacters(state.currentText)
 
     try {
@@ -265,7 +346,7 @@ ShowSpeedWindow() {
     SetTimer () => speedGui.Destroy(), -2000
 }
 
-TogglePause() {
+TogglePause(*) {
     if (!state.isReading) {
         return
     }
@@ -320,25 +401,51 @@ SetVoiceLanguage(language, text := "") {
 }
 
 DetectLanguage(text) {
-    ; Language detection based on common words
+    ; Language detection based on common words and patterns
     frenchWords := ["le", "la", "les", "un", "une", "des", "et", "ou", "mais", "donc", "or", "ni", "car", "que", "qui",
-        "quoi", "dont", "où", "à", "au", "avec", "pour", "sur", "dans", "par", "ce", "cette", "ces"
+        "quoi", "dont", "où", "à", "au", "avec", "pour", "sur", "dans", "par", "ce", "cette", "ces", "je", "tu", "il", "elle",
+        "nous", "vous", "ils", "elles", "mon", "ton", "son", "notre", "votre", "leur"
     ]
     englishWords := ["the", "and", "or", "but", "so", "yet", "for", "nor", "that", "which", "who", "whom", "whose",
-        "when", "where", "why", "how", "a", "an", "in", "on", "at", "with", "by", "this", "these", "those", "is"
+        "when", "where", "why", "how", "a", "an", "in", "on", "at", "with", "by", "this", "these", "those", "is", "are",
+        "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would", "shall", "should"
     ]
+
+    ; Add weight to more distinctive words
+    distinctiveFrench := ["est", "sont", "être", "avoir", "fait", "très", "beaucoup", "toujours", "jamais"]
+    distinctiveEnglish := ["is", "are", "be", "have", "do", "very", "much", "always", "never"]
 
     frenchScore := 0
     englishScore := 0
+    
+    ; Count French-specific characters (adds to French score)
+    frenchChars := "éèêëàâäôöùûüçÉÈÊËÀÂÄÔÖÙÛÜÇ"
+    for char in StrSplit(text) {
+        if InStr(frenchChars, char)
+            frenchScore += 0.5  ; Give moderate weight to accented characters
+    }
 
     ; Split text into words, normalize to lowercase for accurate counting
     words := StrSplit(StrLower(text), " ")
     for word in words {
+        ; Check regular words
         if (HasVal(frenchWords, word))
             frenchScore++
         if (HasVal(englishWords, word))
             englishScore++
+            
+        ; Give extra weight to distinctive words
+        if (HasVal(distinctiveFrench, word))
+            frenchScore += 2
+        if (HasVal(distinctiveEnglish, word))
+            englishScore += 2
     }
+
+    ; Check for language-specific patterns
+    if (RegExMatch(text, "i)qu'[aeiouy]|c'est|n'[aeiouy]|l'[aeiouy]|d'[aeiouy]"))
+        frenchScore += 3
+    if (RegExMatch(text, "i)ing\s|ed\s|'s\s|'ve\s|'re\s|'ll\s"))
+        englishScore += 3
 
     ; Determine the language based on score
     if (englishScore > frenchScore) {
