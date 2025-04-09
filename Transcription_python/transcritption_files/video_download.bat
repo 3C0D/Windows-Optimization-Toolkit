@@ -13,8 +13,15 @@ if not exist "%VENV_PATH%" (
 :: Activate the virtual environment
 call "%VENV_PATH%\Scripts\activate"
 
-:: Update yt-dlp to latest version
-python -m pip install --upgrade yt-dlp
+:: Check if yt-dlp needs updating (only updates if needed)
+echo Checking for yt-dlp updates...
+yt-dlp --update-to stable
+
+:: Check if cookies file exists, if not, try to export it
+if not exist "%~dp0cookies.txt" (
+    echo Trying to export cookies from Chrome...
+    python "%~dp0export_cookies.py"
+)
 
 :: Run the Python script
 python "%~dp0download_video.py"
@@ -24,6 +31,3 @@ pause
 
 :: Deactivate the virtual environment
 deactivate
-
-:: Pause to view results
-pause

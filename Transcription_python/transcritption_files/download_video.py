@@ -5,7 +5,6 @@ import os
 import re
 import time
 import json
-import requests
 
 
 def read_requirements(file_path):
@@ -63,6 +62,7 @@ try:
     import yt_dlp # type: ignore
     from bs4 import BeautifulSoup # type: ignore
     from tqdm import tqdm # type: ignore
+    import requests # type: ignore
 
 except ImportError as e:
     print(f"Erreur lors de l'importation des modules : {e}")
@@ -152,35 +152,33 @@ def download_youtube_video(url):
     print("\nTéléchargement de la vidéo YouTube...")
     local_path = r"C:\Users\dd200\Downloads\Video\Youtube"
     
+    # Add cookies file if available
+    cookies_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+    use_cookies = os.path.exists(cookies_file)
+    
+    # Utiliser des options plus simples et robustes
     ydl_opts = {
-        'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
+        'format': 'best',  # Format simplifié
         'outtmpl': os.path.join(local_path, '%(title)s.%(ext)s'),
         'ffmpeg_location': r'C:\ffmpeg\bin\ffmpeg.exe',
-        'merge_output_format': 'mp4',
         'noplaylist': True,
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-        'http_headers': {
-            'Accept': '*/*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Origin': 'https://www.youtube.com',
-            'Referer': 'https://www.youtube.com/',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin',
-            'Sec-Fetch-Dest': 'empty',
-            'Connection': 'keep-alive',
-        },
         'nocheckcertificate': True,
-        'ignoreerrors': False,
-        'quiet': False,
-        'no_warnings': False,
-        'extractor_retries': 3,
-        'socket_timeout': 30
+        'ignoreerrors': True,  # Ignorer certaines erreurs
+        'no_color': True,      # Désactiver les couleurs qui peuvent causer des problèmes
+        'geo_bypass': True,    # Contourner les restrictions géographiques
+        'geo_bypass_country': 'US',
+        'extractor_retries': 10, # Plus de tentatives
+        'socket_timeout': 60    # Timeout plus long
     }
+    
+    # Use cookies if available
+    if use_cookies:
+        ydl_opts['cookiefile'] = cookies_file
+        print(f"Utilisation du fichier de cookies: {cookies_file}")
 
     try:
+        # Tentative avec yt-dlp directement
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Vérifier si le fichier existe déjà
             info = ydl.extract_info(url, download=False)
             video_title = info.get('title', 'video')
             filename = f"{video_title}.mp4"
@@ -195,8 +193,36 @@ def download_youtube_video(url):
             print("Téléchargement terminé avec succès.")
             
     except Exception as e:
-        print(f"Erreur lors du téléchargement : {str(e)}")
-        return
+        print(f"Erreur avec yt-dlp : {str(e)}")
+        print("Tentative avec méthode alternative...")
+        
+        # Méthode alternative avec subprocess
+        try:
+            cmd = [
+                sys.executable, "-m", "yt_dlp",
+                "--format", "best",
+                "--output", os.path.join(local_path, "%(title)s.%(ext)s"),
+                "--no-playlist",
+                "--no-check-certificate",
+                "--geo-bypass",
+            ]
+            
+            if use_cookies:
+                cmd.extend(["--cookies", cookies_file])
+                
+            cmd.append(url)
+            
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                print(f"Erreur subprocess: {result.stderr}")
+                raise Exception(result.stderr)
+                
+            print("Téléchargement terminé avec succès via subprocess.")
+            
+        except Exception as e2:
+            print(f"Toutes les tentatives ont échoué. Erreur finale : {str(e2)}")
+            return
 def download_odysee_video(url):
     print("\nTéléchargement de la vidéo Odysee...")
     response = requests.get(url)
