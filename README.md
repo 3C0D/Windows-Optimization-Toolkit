@@ -15,6 +15,7 @@ A collection of scripts and tools to enhance your Windows experience with produc
   - [Translate in Browser](#translate-in-browser)
   - [Personal Shortcuts](#personal-shortcuts)
 - [Toggle WIFI](#-toggle_wifi)
+- [Audio Video Download](#-audio-video-download)
 - [Transcription Python](#-transcription_python)
   - [Language Detection and Translation](#language-detection-and-translation)
 - [HTML Text Reader](#-html-text-reader)
@@ -139,6 +140,8 @@ A simple utility to quickly toggle your WiFi connection on and off or restart it
 
 ## 🎥 Transcription_Python
 
+> **Note: Ce module est conservé pour des raisons d'archivage et n'est plus activement utilisé.**
+
 Transcribe videos from Odysee and YouTube into text in both English and French using OpenAI's Whisper speech recognition model.
 
 ### Features
@@ -186,6 +189,38 @@ The transcription system includes advanced language processing capabilities:
 - **Preservation of Formatting:** Maintains text structure during translation
 
 All transcription output is saved as `.txt` files in the `Transcription_Python` folder. For a more readable experience, use the HTML Text Reader described below.
+
+## 📥 Audio Video Download
+
+Un outil puissant pour télécharger des vidéos et de l'audio depuis YouTube, Odysee et d'autres sites web.
+
+### Fonctionnalités
+
+- **Téléchargement de vidéos YouTube** avec choix de qualité (jusqu'à 1080p)
+- **Extraction audio en MP3** avec différentes qualités (192, 128, 96 kbps)
+- **Support pour Odysee** et autres plateformes vidéo
+- **Installation automatique** des dépendances et mises à jour
+- **Exportation automatique des cookies** depuis Chrome pour accéder aux contenus restreints
+
+### Utilisation
+
+1. Copiez l'URL de la vidéo dans le presse-papier
+2. Exécutez `Transcription_python\video_audio_download\video_audio_download.bat`
+3. Choisissez le type de téléchargement (vidéo ou audio)
+4. Sélectionnez la qualité souhaitée
+5. Le fichier sera téléchargé dans le dossier approprié et l'explorateur s'ouvrira automatiquement
+
+### Installation
+
+Aucune installation manuelle n'est nécessaire. Le script gère automatiquement :
+- La création d'un environnement virtuel Python
+- L'installation des modules requis (yt-dlp, pyperclip, etc.)
+- La mise à jour de yt-dlp
+- L'exportation des cookies depuis Chrome
+
+> **Astuce :** Créez un raccourci sur votre bureau pour un accès rapide à l'outil.
+
+Pour plus de détails, consultez le [README dédié](Transcription_python/video_audio_download/README.md) de cet outil.
 
 ## 📖 HTML Text Reader
 

@@ -1,0 +1,15 @@
+# Fichiers de configuration et temporaires
+.last_update
+.vscode/
+
+# Environnement virtuel
+venv/
+
+# Fichiers de cookies
+cookies.txt
+
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
