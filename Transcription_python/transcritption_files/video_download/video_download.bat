@@ -6,22 +6,15 @@ set VENV_PATH=%~dp0venv
 
 :: Check if the virtual environment exists, create it if not
 if not exist "%VENV_PATH%" (
-    echo Creating virtual environment...
+    echo Création de l'environnement virtuel et installation des bibliothèques...
+    echo Cette opération prendra environ une minute, veuillez patienter...
     python -m venv "%VENV_PATH%"
 )
 
 :: Activate the virtual environment
 call "%VENV_PATH%\Scripts\activate"
 
-:: Check if yt-dlp needs updating (only updates if needed)
-echo Checking for yt-dlp updates...
-yt-dlp --update-to stable
-
-:: Check if cookies file exists, if not, try to export it
-if not exist "%~dp0cookies.txt" (
-    echo Trying to export cookies from Chrome...
-    python "%~dp0export_cookies.py"
-)
+:: Les mises à jour de yt-dlp et l'exportation des cookies sont maintenant gérées par le script Python
 
 :: Run the Python script
 python "%~dp0download_video.py"

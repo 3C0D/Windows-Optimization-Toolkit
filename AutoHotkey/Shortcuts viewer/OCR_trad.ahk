@@ -6,7 +6,7 @@
 useGemini := false    ; true pour utiliser Gemini, false pour utiliser Mistral
 
 ; Raccourci clavier: Ctrl + Win + Q
-^#q::
+#q::
 {
     ; Définir les paramètres selon le service choisi
     if (useGemini) {
