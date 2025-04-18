@@ -16,9 +16,6 @@ A collection of scripts and tools to enhance your Windows experience with produc
   - [Personal Shortcuts](#personal-shortcuts)
 - [Toggle WIFI](#-toggle_wifi)
 - [Audio Video Download](#-audio-video-download)
-- [Transcription Python](#-transcription_python)
-  - [Language Detection and Translation](#language-detection-and-translation)
-- [HTML Text Reader](#-html-text-reader)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -30,8 +27,7 @@ This toolkit provides various utilities to optimize your Windows workflow, inclu
 - Text-to-speech functionality
 - Translation tools
 - Network management
-- Video transcription
-- Text file reading enhancements
+- Video and audio download capabilities
 
 ## Prerequisites
 

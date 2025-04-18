@@ -1,2 +1,19 @@
-# folder FL_script
-/FL_script/
+# Fichiers de configuration et temporaires
+.last_update
+.vscode/
+.git/
+.gitattributes
+
+# Environnement virtuel
+venv/
+env/
+
+# Fichiers de cookies
+cookies.txt
+
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
