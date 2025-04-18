@@ -14,7 +14,6 @@ A collection of scripts and tools to enhance your Windows experience with produc
   - [Text-to-Speech](#text-to-speech-tts)
   - [Translate in Browser](#translate-in-browser)
   - [Personal Shortcuts](#personal-shortcuts)
-- [Toggle WIFI](#-toggle_wifi)
 - [Audio Video Download](#-audio-video-download)
 - [Contributing](#contributing)
 - [License](#license)
@@ -26,16 +25,13 @@ This toolkit provides various utilities to optimize your Windows workflow, inclu
 - Keyboard shortcuts for common tasks
 - Text-to-speech functionality
 - Translation tools
-- Network management
 - Video and audio download capabilities
 
 ## Prerequisites
 
 - Windows 10/11
 - [AutoHotkey v2.0](https://www.autohotkey.com/) for AHK scripts
-- [FFmpeg](https://ffmpeg.org/) for transcription features
 - [Python 3.8+](https://www.python.org/downloads/) for Python scripts
-- [Node.js](https://nodejs.org/) for the HTML text reader
 
 ## 🤖 AutoHotkey Scripts
 
