@@ -37,7 +37,7 @@ openInAI() {
     aiMenu.Add("Gemini", (*) => Run("https://gemini.google.com/app"))
     aiMenu.Add("Google AI", (*) => Run("https://aistudio.google.com/prompts/new_chat"))
     aiMenu.Add("Cici", (*) => Run("https://www.cici.com/chat/?from_logout=1"))
-    aiMenu.Add("Liner", (*) => Run("https://getliner.com/"))
+    ; aiMenu.Add("Liner", (*) => Run("https://getliner.com/"))
     aiMenu.Add("Genspark", (*) => Run("https://www.genspark.ai/"))
     aiMenu.Add("Nexus Mind", (*) => Run("https://www.nexusmind.tech/home"))
     aiMenu.Add("Maya", (*) => Run("https://www.sesame.com/research/crossing_the_uncanny_valley_of_voice#demo"))
