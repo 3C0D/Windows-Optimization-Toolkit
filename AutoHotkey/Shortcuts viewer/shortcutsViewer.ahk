@@ -1,14 +1,21 @@
 #Requires AutoHotkey v2.0
+; AutoHotkey v2 Script - Shortcuts Viewer with Sleep Control
 ;https://github.com/TheArkive/JXON_ahk2
 #Include JXON.ahk
 #Include Browser_shortcuts/browserShortcuts.ahk
 ; #Include OCR_trad.ahk
+
+; Global variables for sleep control
+sleepDisabled := false
 
 ; Chemin vers le fichier JSON
 filePath := A_ScriptDir "\shortcuts.json"
 
 ; Raccourci pour ouvrir l'interface (Win+Shift+/)
 #+/:: ShowShortcutsGUI()
+
+; Sleep control shortcut (Shift+Win+V)
++#v:: ToggleSleepMode()
 
 ; Inclure les raccourcis personnels
 
@@ -69,4 +76,58 @@ SaveAndClose(ShortcutsGUI) {
         MsgBox("Erreur lors de l'enregistrement du fichier : " . err.Message)
     }
     ShortcutsGUI.Destroy()
+}
+
+; Sleep control function
+ToggleSleepMode() {
+    global sleepDisabled
+
+    if (!sleepDisabled) {
+        ; Disable sleep mode
+        DllCall("kernel32.dll\SetThreadExecutionState", "UInt", 0x80000003) ; ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED
+        sleepDisabled := true
+        ShowMessage("Mode veille DÉSACTIVÉ", "Votre PC ne rentrera pas en mode veille")
+    } else {
+        ; Re-enable sleep mode
+        DllCall("kernel32.dll\SetThreadExecutionState", "UInt", 0x80000000) ; ES_CONTINUOUS only to reset
+        sleepDisabled := false
+        ShowMessage("Mode veille ACTIVÉ", "Votre PC peut maintenant rentrer en mode veille normalement")
+    }
+}
+
+; Function to show status message
+global msgGui := 0
+
+ShowMessage(title, message) {
+    global msgGui
+    if msgGui {
+        msgGui.Destroy()
+    }
+    msgGui := Gui()
+    msgGui.Opt("+AlwaysOnTop +Owner +Border")
+    msgGui.Title := title
+    msgGui.SetFont("s13 bold", "Segoe UI")
+    msgGui.MarginX := 30
+    msgGui.MarginY := 20
+    msgGui.BackColor := "F8F8F8"
+    msgGui.Add("Text", "w380 r3 Center", message)
+    btn := msgGui.Add("Button", "w120 h35 Center", "OK")
+    btn.SetFont("s12 bold", "Segoe UI")
+    btn.OnEvent("Click", (*) => (msgGui.Destroy(), msgGui := 0))
+    msgGui.OnEvent("Escape", (*) => (msgGui.Destroy(), msgGui := 0))
+    msgGui.Show("w420 h150")
+    btn.Focus()
+    ; Fermeture automatique après 4 secondes
+    SetTimer((*) => (msgGui ? (msgGui.Destroy(), msgGui := 0) : msgGui := 0), -4000)
+}
+
+; Clean exit function to restore normal sleep settings
+OnExit(ExitFunc)
+
+ExitFunc(ExitReason, ExitCode) {
+    global sleepDisabled
+    ; Ensure normal settings are restored before exit
+    if (sleepDisabled) {
+        DllCall("kernel32.dll\SetThreadExecutionState", "UInt", 0x80000000)
+    }
 }
