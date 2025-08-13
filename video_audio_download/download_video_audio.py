@@ -576,8 +576,8 @@ def download_youtube_video(url):
                         # Normaliser le titre de la vidéo pour la comparaison
                         normalized_title = (
                             video_title.replace('"', "")
-                            .replace("“", "")
-                            .replace("”", "")
+                            .replace(""", "")
+                            .replace(""", "")
                             .replace("＂", "")
                         )
 
@@ -586,8 +586,8 @@ def download_youtube_video(url):
                             file_name_without_ext = os.path.splitext(file)[0]
                             normalized_file_name = (
                                 file_name_without_ext.replace('"', "")
-                                .replace("“", "")
-                                .replace("”", "")
+                                .replace(""", "")
+                                .replace(""", "")
                                 .replace("＂", "")
                             )
 
@@ -933,51 +933,283 @@ def download_youtube_video(url):
 
 
 def download_odysee_video(url):
-    print("\nTéléchargement de la vidéo Odysee...")
-    response = requests.get(url)
-    soup = BeautifulSoup(response.content, "html.parser")
-    local_path = get_download_path("odysee")
-    video_name = soup.find("title").text + ".mp4"
-    video_path = os.path.join(local_path, video_name)
+    """Télécharge une vidéo depuis Odysee avec options audio/vidéo et choix de qualité"""
+    print("\nAnalyse de la vidéo Odysee...")
+    
+    # Demander à l'utilisateur s'il souhaite télécharger la vidéo ou seulement l'audio
+    print("\nQue souhaitez-vous télécharger ?")
+    print("1. Vidéo (avec audio)")
+    print("2. Audio uniquement (MP3)")
 
-    # Étape 1 : Vérifier si le fichier existe déjà
-    if os.path.exists(video_path):
-        print(
-            f"\nAttention: Le fichier '{video_name}' existe déjà dans '{local_path}'."
-        )
-        while True:
-            choice = input("Voulez-vous remplacer ce fichier ? (o/n): ").lower()
-            if choice in ["o", "oui", "y", "yes"]:
-                print("Le fichier existant sera remplacé.")
-                break
-            elif choice in ["n", "non", "no"]:
-                print("Téléchargement annulé.")
-                return
+    download_type = None
+    while download_type is None:
+        try:
+            choice = input(
+                "\nEntrez votre choix (1-2) ou appuyez sur Entrée pour la vidéo: "
+            )
+            if not choice.strip():
+                download_type = "video"
             else:
-                print("Veuillez répondre par 'o' (oui) ou 'n' (non).")
+                choice = int(choice)
+                if choice == 1:
+                    download_type = "video"
+                elif choice == 2:
+                    download_type = "audio"
+                else:
+                    print("Veuillez entrer 1 ou 2")
+        except ValueError:
+            print("Veuillez entrer un nombre valide")
 
+    # Déterminer le chemin de destination en fonction du type de téléchargement
+    if download_type == "video":
+        local_path = get_download_path("odysee")
+    else:  # audio
+        local_path = get_download_path("odysee_audio")
+
+    # Essayer d'abord avec yt-dlp (méthode recommandée pour Odysee)
     try:
-        script_tag = soup.find("script", type="application/ld+json")
-        json_content = json.loads(script_tag.string)
-        video_url = json_content.get("contentUrl")
+        print("Extraction des informations de la vidéo...")
+        
+        # Options pour l'extraction des informations
+        info_opts = {
+            "noplaylist": True,
+            "nocheckcertificate": True,
+            "ignoreerrors": True,
+            "no_color": True,
+            "extractor_retries": 5,
+            "socket_timeout": 30,
+        }
 
-        if not video_url:
-            print("URL du contenu non trouvée dans les métadonnées.")
-            return
+        with yt_dlp.YoutubeDL(info_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            video_title = info.get("title", "video_odysee")
+            
+            # Nettoyer le titre pour le nom de fichier
+            clean_title = re.sub(r'[<>:"/\\|?*]', "_", video_title)
+            
+            # Déterminer l'extension en fonction du type de téléchargement
+            file_ext = ".mp3" if download_type == "audio" else ".mp4"
+            filename = f"{clean_title}{file_ext}"
+            filepath = os.path.join(local_path, filename)
 
-        response = requests.get(video_url, stream=True)
+            # Vérifier si le fichier existe déjà
+            if os.path.exists(filepath):
+                print("\n" + "=" * 60)
+                print(f"ATTENTION: Le fichier '{filename}' existe déjà !")
+                print(f"Chemin: {filepath}")
+                print("=" * 60)
 
-        with open(video_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
+                while True:
+                    choice = input("Voulez-vous remplacer ce fichier ? (o/n): ").lower()
+                    if choice in ["o", "oui", "y", "yes"]:
+                        print("Le fichier existant sera remplacé.")
+                        try:
+                            os.remove(filepath)
+                            print("Fichier existant supprimé.")
+                            break
+                        except Exception as e:
+                            print(f"Impossible de supprimer le fichier existant: {e}")
+                            return
+                    elif choice in ["n", "non", "no"]:
+                        print("Téléchargement annulé.")
+                        return
+                    else:
+                        print("Veuillez répondre par 'o' (oui) ou 'n' (non).")
 
-        print("Téléchargement terminé avec succès.")
-        print(f"Fichier enregistré dans: {video_path}")
-        open_file_explorer(video_path)
+            # Configuration en fonction du type de téléchargement
+            if download_type == "video":
+                # Récupérer les formats disponibles pour la vidéo
+                available_formats = info.get("formats", [])
+                quality_options = get_available_video_qualities(available_formats)
+
+                if not quality_options:
+                    print("Aucun format vidéo spécifique trouvé. Utilisation du format par défaut.")
+                    format_option = "best"
+                else:
+                    # Afficher les options de qualité disponibles
+                    print("\nFormats vidéo disponibles:")
+                    for i, option in enumerate(quality_options, 1):
+                        print(f"  {i}. {option['display_name']}")
+
+                    # Demander à l'utilisateur de choisir
+                    choice = None
+                    while choice is None:
+                        try:
+                            user_input = input(
+                                "\nChoisissez la qualité (numéro) ou appuyez sur Entrée pour la meilleure qualité: "
+                            )
+                            if not user_input.strip():
+                                choice = 1  # Meilleure qualité par défaut
+                            else:
+                                choice = int(user_input)
+                                if choice < 1 or choice > len(quality_options):
+                                    print(
+                                        f"Veuillez entrer un nombre entre 1 et {len(quality_options)}"
+                                    )
+                                    choice = None
+                        except ValueError:
+                            print("Veuillez entrer un nombre valide")
+
+                    # Récupérer le format choisi
+                    selected_option = quality_options[choice - 1]
+                    format_option = selected_option["format_string"]
+                    print(f"\nTéléchargement en {selected_option['display_name']}...")
+
+            else:  # Audio uniquement
+                # Options de qualité audio
+                audio_quality_options = [
+                    {"bitrate": "192", "display_name": "Haute qualité (192 kbps)"},
+                    {"bitrate": "128", "display_name": "Qualité standard (128 kbps)"},
+                    {"bitrate": "96", "display_name": "Basse qualité (96 kbps)"},
+                ]
+
+                # Afficher les options de qualité audio
+                print("\nFormats audio disponibles:")
+                for i, option in enumerate(audio_quality_options, 1):
+                    print(f"  {i}. {option['display_name']}")
+
+                # Demander à l'utilisateur de choisir
+                choice = None
+                while choice is None:
+                    try:
+                        user_input = input(
+                            "\nChoisissez la qualité audio (numéro) ou appuyez sur Entrée pour la meilleure qualité: "
+                        )
+                        if not user_input.strip():
+                            choice = 1  # Meilleure qualité par défaut
+                        else:
+                            choice = int(user_input)
+                            if choice < 1 or choice > len(audio_quality_options):
+                                print(
+                                    f"Veuillez entrer un nombre entre 1 et {len(audio_quality_options)}"
+                                )
+                                choice = None
+                    except ValueError:
+                        print("Veuillez entrer un nombre valide")
+
+                # Récupérer la qualité audio choisie
+                selected_audio_option = audio_quality_options[choice - 1]
+                audio_bitrate = selected_audio_option["bitrate"]
+                print(f"\nTéléchargement audio en {selected_audio_option['display_name']}...")
+
+                # Pour l'audio, on utilise le meilleur format audio disponible
+                format_option = "bestaudio/best"
+
+            # Options pour le téléchargement
+            ydl_opts = {
+                "format": format_option,
+                "outtmpl": os.path.join(local_path, "%(title)s.%(ext)s"),
+                "noplaylist": True,
+                "nocheckcertificate": True,
+                "ignoreerrors": True,
+                "no_color": True,
+                "extractor_retries": 5,
+                "socket_timeout": 30,
+            }
+
+            # Options spécifiques selon le type de téléchargement
+            if download_type == "video":
+                # Pour la vidéo, forcer la sortie en MP4
+                ydl_opts["merge_output_format"] = "mp4"
+            else:  # Audio uniquement
+                # Pour l'audio, extraire l'audio et convertir en MP3
+                ydl_opts["extractaudio"] = True
+                ydl_opts["audioformat"] = "mp3"
+                ydl_opts["audioquality"] = audio_bitrate
+                # Options supplémentaires pour la conversion audio
+                ydl_opts["postprocessors"] = [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": audio_bitrate,
+                    }
+                ]
+
+            # Télécharger avec yt-dlp
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+
+            # Vérifier le fichier téléchargé
+            file_ext = ".mp3" if download_type == "audio" else ".mp4"
+            final_path = filepath
+
+            # Si le fichier n'existe pas avec le nom prévu, chercher le fichier réel
+            if not os.path.exists(final_path):
+                files = os.listdir(local_path)
+                matching_files = [
+                    os.path.join(local_path, f)
+                    for f in files
+                    if f.endswith(file_ext)
+                ]
+
+                if matching_files:
+                    newest_file = max(matching_files, key=os.path.getctime, default=None)
+                    if newest_file:
+                        final_path = newest_file
+
+            print("Téléchargement terminé avec succès.")
+            print(f"Fichier enregistré dans: {final_path}")
+            open_file_explorer(final_path)
 
     except Exception as e:
-        print(f"Erreur lors du téléchargement : {str(e)}")
+        print(f"Erreur avec yt-dlp pour Odysee: {str(e)}")
+        print("Tentative avec la méthode alternative (parsing HTML)...")
+        
+        # Méthode alternative: parsing HTML direct (pour vidéo seulement)
+        if download_type == "video":
+            try:
+                response = requests.get(url)
+                soup = BeautifulSoup(response.content, "html.parser")
+                
+                # Extraire le titre depuis la balise title
+                title_tag = soup.find("title")
+                video_name = (title_tag.text if title_tag else "video_odysee") + ".mp4"
+                video_name = re.sub(r'[<>:"/\\|?*]', "_", video_name)
+                video_path = os.path.join(local_path, video_name)
+
+                # Vérifier si le fichier existe déjà
+                if os.path.exists(video_path):
+                    print(f"\nAttention: Le fichier '{video_name}' existe déjà dans '{local_path}'.")
+                    while True:
+                        choice = input("Voulez-vous remplacer ce fichier ? (o/n): ").lower()
+                        if choice in ["o", "oui", "y", "yes"]:
+                            print("Le fichier existant sera remplacé.")
+                            break
+                        elif choice in ["n", "non", "no"]:
+                            print("Téléchargement annulé.")
+                            return
+                        else:
+                            print("Veuillez répondre par 'o' (oui) ou 'n' (non).")
+
+                # Chercher l'URL de la vidéo dans les métadonnées JSON-LD
+                script_tag = soup.find("script", type="application/ld+json")
+                if script_tag:
+                    json_content = json.loads(script_tag.string)
+                    video_url = json_content.get("contentUrl")
+
+                    if video_url:
+                        print("Téléchargement de la vidéo...")
+                        response = requests.get(video_url, stream=True)
+                        
+                        with open(video_path, "wb") as f:
+                            for chunk in response.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+
+                        print("Téléchargement terminé avec succès.")
+                        print(f"Fichier enregistré dans: {video_path}")
+                        open_file_explorer(video_path)
+                    else:
+                        print("URL de la vidéo non trouvée dans les métadonnées.")
+                else:
+                    print("Métadonnées JSON-LD non trouvées.")
+
+            except Exception as e2:
+                print(f"Erreur avec la méthode alternative: {str(e2)}")
+                
+        else:  # Audio demandé mais yt-dlp a échoué
+            print("Désolé, l'extraction audio depuis Odysee nécessite yt-dlp.")
+            print("Veuillez réessayer ou vérifier que yt-dlp est correctement installé.")
 
 
 def download_generic_video(url):
