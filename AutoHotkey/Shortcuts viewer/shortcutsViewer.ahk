@@ -3,6 +3,7 @@
 ;https://github.com/TheArkive/JXON_ahk2
 #Include JXON.ahk
 #Include Browser_shortcuts/browserShortcuts.ahk
+#Include Mute_micro.ahk
 ; #Include OCR_trad.ahk
 
 ; Global variables for sleep control

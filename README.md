@@ -39,7 +39,6 @@ This toolkit provides utilities to optimize your Windows workflow, including:
 - [Python 3.8+](https://www.python.org/downloads/) for Python scripts
 - [AutoHotkey v2.0](https://www.autohotkey.com/) for Shortcuts Viewer and productivity tools
 
-
 ## 📥 Audio Video Download
 
 Un outil puissant pour télécharger des vidéos et de l'audio depuis YouTube, Odysee et d'autres sites web.
@@ -82,6 +81,9 @@ Un outil AutoHotkey pour gérer et afficher vos raccourcis clavier et améliorer
 - **Interface utilisateur intuitive** pour consulter et modifier vos raccourcis
 - **Raccourci global** (Win+Shift+/) pour ouvrir l'interface à tout moment
 - **Thème sombre** pour un confort visuel optimal
+- **Nouveau : Contrôle du microphone** avec notifications visuelles (Win+Shift+M)
+- **Nouveau : Contrôle de la veille du PC** pour empêcher l'ordinateur de se mettre en veille (Shift+Win+V)
+- **Nouveau : Menu des services d'IA** avec plus d'options (Win+Shift+I)
 
 ### Applications incluses
 
@@ -103,6 +105,8 @@ Un outil AutoHotkey pour gérer et afficher vos raccourcis clavier et améliorer
    - **Win+Shift+U** : Recherche/URL
    - **Win+Shift+T** : Traduction
    - **Win+Q** : OCR et traduction d'image
+   - **Win+Shift+M** : Couper/activer le microphone
+   - **Shift+Win+V** : Basculer le mode veille du PC
 
 ### Installation
 
