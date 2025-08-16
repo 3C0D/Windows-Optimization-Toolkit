@@ -4,6 +4,7 @@
 #Include JXON.ahk
 #Include Browser_shortcuts/browserShortcuts.ahk
 #Include Mute_micro.ahk
+#Include Mute_copilot_windows.ahk
 ; #Include OCR_trad.ahk
 
 ; Global variables for sleep control

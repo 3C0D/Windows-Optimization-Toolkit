@@ -1,6 +1,8 @@
 ; Mute_micro.ahk - Module pour couper/activer le microphone
 ; À inclure dans le script principal avec #Include Mute_micro.ahk
 
+#Requires AutoHotkey v2.0
+
 ; Variables pour la fenêtre de notification
 notificationGui := ""
 notificationTimer := ""
@@ -85,4 +87,3 @@ CloseNotification()
     }
     notificationTimer := ""
 }
-
