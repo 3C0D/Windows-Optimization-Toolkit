@@ -19,13 +19,6 @@ if ($ethernet) {
     netsh interface set interface name="$($wifi.Name)" admin=disable
     
     Write-Host "Wi-Fi complètement désactivé." -ForegroundColor Yellow
-} else {
-    Write-Host "Aucun Ethernet détecté - Activation du Wi-Fi..." -ForegroundColor Cyan
-    
-    # Réactiver complètement le Wi-Fi
-    netsh interface set interface name="$($wifi.Name)" admin=enable
-    
-    Write-Host "Wi-Fi réactivé." -ForegroundColor Green
 }
 
 # Afficher l'état final
