@@ -29,6 +29,7 @@ openInAI() {
     aiMenu := Menu()
     aiMenu.Add("Claude", (*) => Run("https://claude.ai"))
     aiMenu.Add("ChatGPT", (*) => Run("https://chatgpt.com/"))
+    aiMenu.Add("Kimi", (*) => Run("https://www.kimi.com/"))
     aiMenu.Add("Mistral", (*) => Run("https://chat.mistral.ai/chat"))
     aiMenu.Add("Google AI", (*) => Run("https://aistudio.google.com/prompts/new_chat"))
     aiMenu.Add("Genspark", (*) => Run("https://www.genspark.ai/"))
