@@ -158,14 +158,15 @@ def update_yt_dlp():
         print(
             "Les mises à jour régulières sont nécessaires pour contourner les changements d'API de YouTube."
         )
+        # Use pip to update yt-dlp since it was installed via pip
         result = subprocess.run(
-            [sys.executable, "-m", "yt_dlp", "--update-to", "stable"],
+            [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"],
             capture_output=True,
             text=True,
             check=False,
         )
         if result.returncode == 0:
-            if "yt-dlp is up to date" in result.stdout:
+            if "already up-to-date" in result.stdout.lower() or "already satisfied" in result.stdout.lower():
                 print("yt-dlp est déjà à jour.")
             else:
                 print("yt-dlp a été mis à jour avec succès.")
@@ -197,7 +198,7 @@ def check_and_export_cookies():
                 print(
                     "\nFichier de cookies corrompu détecté et supprimé. Tentative de recréation..."
                 )
-            except:
+            except Exception:
                 pass
 
     # Si on arrive ici, soit le fichier n'existe pas, soit il était corrompu et a été supprimé
@@ -287,7 +288,7 @@ def check_and_install_modules():
                         current_time - last_update < 30 * 24 * 60 * 60
                     ):  # 30 jours en secondes
                         update_needed = False
-            except:
+            except Exception:
                 pass  # En cas d'erreur, on procède à la mise à jour
 
         if update_needed:
@@ -297,7 +298,7 @@ def check_and_install_modules():
             try:
                 with open(last_update_file, "w") as f:
                     f.write(str(current_time))
-            except:
+            except Exception:
                 pass  # Ignorer les erreurs d'écriture
         else:
             print("\nTous les modules sont à jour.")
@@ -336,8 +337,8 @@ except ImportError as e:
 # Mettre à jour yt-dlp et exporter les cookies après l'installation des modules
 try:
     update_yt_dlp()
-except Exception as e:
-    print(f"\nAttention: Impossible de mettre à jour yt-dlp: {e}")
+except Exception:
+    print("\nAttention: Impossible de mettre à jour yt-dlp.")
     print("Le téléchargement pourrait échouer si yt-dlp n'est pas à jour.")
 
 # Essayer d'exporter les cookies, mais continuer même en cas d'échec
@@ -472,27 +473,38 @@ def is_valid_url(url):
 
 
 def get_url_from_clipboard():
-    """Récupère et valide l'URL depuis le presse-papier"""
+    """Récupère et valide l'URL ou le chemin local depuis le presse-papier"""
     print("\nRécupération de l'URL depuis le presse-papier...")
-    url = pyperclip.paste()
+    content = pyperclip.paste()
 
-    if not url:
+    if not content:
         print("Le presse-papier est vide.")
         return None
 
-    if not is_valid_url(url):
-        print("Le contenu du presse-papier n'est pas une URL valide.")
-        return None
+    content = content.strip()
+    # Supprimer les guillemets si présents
+    if (content.startswith('"') and content.endswith('"')) or (content.startswith("'") and content.endswith("'")):
+        content = content[1:-1]
+    print(f"Contenu du presse-papier : '{content}'")
 
-    if is_valid_youtube_url(url):
-        print("URL YouTube valide trouvée.")
-        return ("youtube", url)
-    elif is_valid_odysee_url(url):
-        print("URL Odysee valide trouvée.")
-        return ("odysee", url)
+    if is_valid_url(content):
+        if is_valid_youtube_url(content):
+            print("URL YouTube valide trouvée.")
+            return ("youtube", content)
+        elif is_valid_odysee_url(content):
+            print("URL Odysee valide trouvée.")
+            return ("odysee", content)
+        else:
+            print("URL générique trouvée.")
+            return ("generic", content)
     else:
-        print("URL générique trouvée.")
-        return ("generic", url)
+        # Vérifier si c'est un chemin local
+        if os.path.exists(content):
+            print("Chemin local détecté.")
+            return ("local", content)
+        else:
+            print("Le contenu du presse-papier n'est pas une URL valide ni un chemin local existant.")
+            return None
 
 
 def download_youtube_video(url):
@@ -544,6 +556,12 @@ def download_youtube_video(url):
         "geo_bypass_country": "US",
         "extractor_retries": 10,
         "socket_timeout": 60,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"],
+                "player_skip": ["js", "configs"],
+            }
+        },
     }
 
     # Use cookies if available
@@ -576,8 +594,11 @@ def download_youtube_video(url):
                         # Normaliser le titre de la vidéo pour la comparaison
                         normalized_title = (
                             video_title.replace('"', "")
-                            .replace(""", "")
-                            .replace(""", "")
+                            .replace(
+                                """, "")
+                            .replace(""",
+                                "",
+                            )
                             .replace("＂", "")
                         )
 
@@ -586,8 +607,11 @@ def download_youtube_video(url):
                             file_name_without_ext = os.path.splitext(file)[0]
                             normalized_file_name = (
                                 file_name_without_ext.replace('"', "")
-                                .replace(""", "")
-                                .replace(""", "")
+                                .replace(
+                                    """, "")
+                                .replace(""",
+                                    "",
+                                )
                                 .replace("＂", "")
                             )
 
@@ -715,7 +739,7 @@ def download_youtube_video(url):
             ydl_opts = {
                 "format": format_option,
                 "outtmpl": os.path.join(local_path, "%(title)s.%(ext)s"),
-                "ffmpeg_location": r"C:\ffmpeg\bin\ffmpeg.exe",
+                "ffmpeg_location": r"C:\ffmpeg\bin",
                 "noplaylist": True,
                 "nocheckcertificate": True,
                 "ignoreerrors": True,
@@ -724,6 +748,12 @@ def download_youtube_video(url):
                 "geo_bypass_country": "US",
                 "extractor_retries": 10,
                 "socket_timeout": 60,
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["android", "web"],
+                        "player_skip": ["js", "configs"],
+                    }
+                },
             }
 
             # Options spécifiques selon le type de téléchargement
@@ -835,6 +865,8 @@ def download_youtube_video(url):
                     format_option,
                     "--output",
                     os.path.join(local_path, "%(title)s.%(ext)s"),
+                    "--ffmpeg-location",
+                    r"C:\ffmpeg\bin",
                     "--no-playlist",
                     "--no-check-certificate",
                     "--geo-bypass",
@@ -878,6 +910,8 @@ def download_youtube_video(url):
                     "bestaudio/best",
                     "--output",
                     os.path.join(local_path, "%(title)s.%(ext)s"),
+                    "--ffmpeg-location",
+                    r"C:\ffmpeg\bin",
                     "--no-playlist",
                     "--no-check-certificate",
                     "--geo-bypass",
@@ -895,7 +929,7 @@ def download_youtube_video(url):
 
             cmd.append(url)
 
-            print(f"\nTéléchargement avec la qualité sélectionnée...")
+            print("\nTéléchargement avec la qualité sélectionnée...")
             result = subprocess.run(cmd, capture_output=True, text=True)
 
             if result.returncode != 0:
@@ -935,7 +969,7 @@ def download_youtube_video(url):
 def download_odysee_video(url):
     """Télécharge une vidéo depuis Odysee avec options audio/vidéo et choix de qualité"""
     print("\nAnalyse de la vidéo Odysee...")
-    
+
     # Demander à l'utilisateur s'il souhaite télécharger la vidéo ou seulement l'audio
     print("\nQue souhaitez-vous télécharger ?")
     print("1. Vidéo (avec audio)")
@@ -969,7 +1003,7 @@ def download_odysee_video(url):
     # Essayer d'abord avec yt-dlp (méthode recommandée pour Odysee)
     try:
         print("Extraction des informations de la vidéo...")
-        
+
         # Options pour l'extraction des informations
         info_opts = {
             "noplaylist": True,
@@ -983,10 +1017,10 @@ def download_odysee_video(url):
         with yt_dlp.YoutubeDL(info_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             video_title = info.get("title", "video_odysee")
-            
+
             # Nettoyer le titre pour le nom de fichier
             clean_title = re.sub(r'[<>:"/\\|?*]', "_", video_title)
-            
+
             # Déterminer l'extension en fonction du type de téléchargement
             file_ext = ".mp3" if download_type == "audio" else ".mp4"
             filename = f"{clean_title}{file_ext}"
@@ -1023,7 +1057,9 @@ def download_odysee_video(url):
                 quality_options = get_available_video_qualities(available_formats)
 
                 if not quality_options:
-                    print("Aucun format vidéo spécifique trouvé. Utilisation du format par défaut.")
+                    print(
+                        "Aucun format vidéo spécifique trouvé. Utilisation du format par défaut."
+                    )
                     format_option = "best"
                 else:
                     # Afficher les options de qualité disponibles
@@ -1090,7 +1126,9 @@ def download_odysee_video(url):
                 # Récupérer la qualité audio choisie
                 selected_audio_option = audio_quality_options[choice - 1]
                 audio_bitrate = selected_audio_option["bitrate"]
-                print(f"\nTéléchargement audio en {selected_audio_option['display_name']}...")
+                print(
+                    f"\nTéléchargement audio en {selected_audio_option['display_name']}..."
+                )
 
                 # Pour l'audio, on utilise le meilleur format audio disponible
                 format_option = "bestaudio/best"
@@ -1099,6 +1137,7 @@ def download_odysee_video(url):
             ydl_opts = {
                 "format": format_option,
                 "outtmpl": os.path.join(local_path, "%(title)s.%(ext)s"),
+                "ffmpeg_location": r"C:\ffmpeg\bin",
                 "noplaylist": True,
                 "nocheckcertificate": True,
                 "ignoreerrors": True,
@@ -1137,13 +1176,13 @@ def download_odysee_video(url):
             if not os.path.exists(final_path):
                 files = os.listdir(local_path)
                 matching_files = [
-                    os.path.join(local_path, f)
-                    for f in files
-                    if f.endswith(file_ext)
+                    os.path.join(local_path, f) for f in files if f.endswith(file_ext)
                 ]
 
                 if matching_files:
-                    newest_file = max(matching_files, key=os.path.getctime, default=None)
+                    newest_file = max(
+                        matching_files, key=os.path.getctime, default=None
+                    )
                     if newest_file:
                         final_path = newest_file
 
@@ -1154,13 +1193,13 @@ def download_odysee_video(url):
     except Exception as e:
         print(f"Erreur avec yt-dlp pour Odysee: {str(e)}")
         print("Tentative avec la méthode alternative (parsing HTML)...")
-        
+
         # Méthode alternative: parsing HTML direct (pour vidéo seulement)
         if download_type == "video":
             try:
                 response = requests.get(url)
                 soup = BeautifulSoup(response.content, "html.parser")
-                
+
                 # Extraire le titre depuis la balise title
                 title_tag = soup.find("title")
                 video_name = (title_tag.text if title_tag else "video_odysee") + ".mp4"
@@ -1169,9 +1208,13 @@ def download_odysee_video(url):
 
                 # Vérifier si le fichier existe déjà
                 if os.path.exists(video_path):
-                    print(f"\nAttention: Le fichier '{video_name}' existe déjà dans '{local_path}'.")
+                    print(
+                        f"\nAttention: Le fichier '{video_name}' existe déjà dans '{local_path}'."
+                    )
                     while True:
-                        choice = input("Voulez-vous remplacer ce fichier ? (o/n): ").lower()
+                        choice = input(
+                            "Voulez-vous remplacer ce fichier ? (o/n): "
+                        ).lower()
                         if choice in ["o", "oui", "y", "yes"]:
                             print("Le fichier existant sera remplacé.")
                             break
@@ -1190,7 +1233,7 @@ def download_odysee_video(url):
                     if video_url:
                         print("Téléchargement de la vidéo...")
                         response = requests.get(video_url, stream=True)
-                        
+
                         with open(video_path, "wb") as f:
                             for chunk in response.iter_content(chunk_size=8192):
                                 if chunk:
@@ -1206,10 +1249,91 @@ def download_odysee_video(url):
 
             except Exception as e2:
                 print(f"Erreur avec la méthode alternative: {str(e2)}")
-                
+
         else:  # Audio demandé mais yt-dlp a échoué
             print("Désolé, l'extraction audio depuis Odysee nécessite yt-dlp.")
-            print("Veuillez réessayer ou vérifier que yt-dlp est correctement installé.")
+            print(
+                "Veuillez réessayer ou vérifier que yt-dlp est correctement installé."
+            )
+
+
+def download_local_audio(file_path):
+    """Extrait l'audio d'un fichier vidéo local"""
+    print("\nExtraction de l'audio depuis le fichier local...")
+
+    if not os.path.exists(file_path):
+        print("Le fichier n'existe pas.")
+        return
+
+    # Déterminer le chemin de sortie
+    input_dir = os.path.dirname(file_path)
+    input_filename = os.path.basename(file_path)
+    name_without_ext = os.path.splitext(input_filename)[0]
+    output_filename = name_without_ext + ".mp3"
+
+    # Obtenir les dossiers de base
+    downloads_folder = get_windows_downloads_folder()
+    video_folder = os.path.join(downloads_folder, "Video")
+    audio_folder = os.path.join(downloads_folder, "Audio")
+
+    output_path = None
+    if input_dir.startswith(video_folder):
+        # Obtenir le sous-dossier relatif
+        relative_path = os.path.relpath(input_dir, video_folder)
+        if relative_path and not relative_path.startswith('.'):
+            audio_subfolder = os.path.join(audio_folder, relative_path)
+            os.makedirs(audio_subfolder, exist_ok=True)
+            output_path = os.path.join(audio_subfolder, output_filename)
+        else:
+            output_path = os.path.join(input_dir, output_filename)
+    else:
+        # Pas dans un dossier Video, mettre dans le même dossier
+        output_path = os.path.join(input_dir, output_filename)
+
+    # Vérifier si le fichier de sortie existe déjà
+    if os.path.exists(output_path):
+        print(f"\nLe fichier audio '{output_filename}' existe déjà.")
+        while True:
+            choice = input("Voulez-vous remplacer ce fichier ? (o/n): ").lower()
+            if choice in ["o", "oui", "y", "yes"]:
+                try:
+                    os.remove(output_path)
+                    print("Fichier existant supprimé.")
+                    break
+                except Exception as e:
+                    print(f"Impossible de supprimer le fichier existant: {e}")
+                    return
+            elif choice in ["n", "non", "no"]:
+                print("Extraction annulée.")
+                return
+            else:
+                print("Veuillez répondre par 'o' (oui) ou 'n' (non).")
+
+    # Extraire l'audio avec ffmpeg
+    ffmpeg_path = r"C:\ffmpeg\bin\ffmpeg.exe"
+    cmd = [
+        ffmpeg_path,
+        "-i", file_path,
+        "-vn",
+        "-acodec", "mp3",
+        "-ab", "192k",
+        output_path
+    ]
+
+    try:
+        print("Extraction en cours...")
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode == 0:
+            print("Extraction d'audio terminée.")
+            print(f"Fichier enregistré dans: {output_path}")
+            open_file_explorer(output_path)
+        else:
+            print("Échec de l'extraction audio.")
+            print(f"Erreur: {result.stderr}")
+            print("Le fichier n'est peut-être pas un fichier vidéo dont on peut extraire l'audio.")
+    except Exception as e:
+        print(f"Erreur lors de l'extraction: {e}")
 
 
 def download_generic_video(url):
@@ -1273,7 +1397,7 @@ def download_generic_video(url):
                                     video_sources.append(
                                         {"url": url, "quality": quality}
                                     )
-            except:
+            except Exception:
                 continue
 
         # Chercher dans les balises vidéo et source
@@ -1343,7 +1467,7 @@ def download_generic_video(url):
 
                 print(f"\nTéléchargement terminé avec succès : {video_name}")
                 print(f"Fichier enregistré dans: {video_path}")
-                print(f"Taille : {total_size / (1024*1024):.2f} MB")
+                print(f"Taille : {total_size / (1024 * 1024):.2f} MB")
                 print(f"Temps total : {time.time() - start_time:.2f} secondes")
                 open_file_explorer(video_path)
 
@@ -1376,10 +1500,12 @@ def main():
             download_youtube_video(url)
         elif type_url == "odysee":
             download_odysee_video(url)
+        elif type_url == "local":
+            download_local_audio(url)
         else:
             download_generic_video(url)
     except Exception as e:
-        print(f"Erreur lors du téléchargement : {e}")
+        print(f"Erreur lors du traitement : {e}")
 
     print("\n===== Processus terminé =====")
 

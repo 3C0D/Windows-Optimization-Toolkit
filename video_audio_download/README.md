@@ -8,6 +8,7 @@ Cet outil permet de télécharger facilement des vidéos ou de l'audio (MP3) dep
 - Extraction audio uniquement en MP3 avec différentes qualités (192, 128, 96 kbps)
 - Téléchargement de vidéos Odysee
 - Téléchargement depuis d'autres sites web (mode générique)
+- **Extraction audio depuis des fichiers vidéo locaux** (MP4, etc.)
 - Installation automatique des dépendances
 - Mise à jour automatique de yt-dlp
 - Exportation automatique des cookies YouTube depuis Chrome
@@ -16,6 +17,7 @@ Cet outil permet de télécharger facilement des vidéos ou de l'audio (MP3) dep
 
 - Python 3.6 ou supérieur
 - Navigateur Chrome (pour l'exportation des cookies YouTube)
+- FFmpeg (pour l'extraction audio des fichiers locaux)
 - Connexion à Internet
 
 ## Installation
@@ -39,18 +41,20 @@ Pour faciliter l'accès à l'outil, vous pouvez créer un raccourci sur votre Bu
 
 ## Utilisation
 
-1. **Copiez l'URL** de la vidéo que vous souhaitez télécharger dans le presse-papier
+1. **Copiez l'URL** de la vidéo que vous souhaitez télécharger **ou le chemin d'un fichier vidéo local** dans le presse-papier
 2. **Exécutez le fichier `video_audio_download.bat`** ou utilisez le raccourci créé sur le Bureau
-3. **Choisissez le type de téléchargement** : vidéo complète ou audio uniquement (MP3)
-4. Si le fichier existe déjà, le script vous demandera si vous souhaitez le remplacer
-5. **Sélectionnez la qualité** souhaitée (vidéo ou audio selon votre choix)
-6. Le fichier sera téléchargé dans le dossier approprié :
-   - Vidéos YouTube : `C:\Users\dd200\Downloads\Video\Youtube`
-   - Audio YouTube : `C:\Users\dd200\Downloads\Audio\Youtube`
-   - Vidéos Odysee : `C:\Users\dd200\Downloads\Video\Odysee`
-   - Audio Odysee : `C:\Users\dd200\Downloads\Audio\Odysee`
-   - Autres sites : `C:\Users\dd200\Downloads\Video\Generic` ou `C:\Users\dd200\Downloads\Audio\Generic`
-7. Une fois le téléchargement terminé, l'explorateur de fichiers Windows s'ouvrira automatiquement pour afficher le fichier téléchargé
+3. **Pour les URLs** : Choisissez le type de téléchargement : vidéo complète ou audio uniquement (MP3)
+4. **Pour les fichiers locaux** : L'extraction audio se lance automatiquement (MP3 192 kbps)
+5. Si le fichier existe déjà, le script vous demandera si vous souhaitez le remplacer
+6. **Sélectionnez la qualité** souhaitée (vidéo ou audio selon votre choix, sauf pour les fichiers locaux)
+7. Le fichier sera téléchargé/extrait dans le dossier approprié :
+    - Vidéos YouTube : `C:\Users\dd200\Downloads\Video\Youtube`
+    - Audio YouTube : `C:\Users\dd200\Downloads\Audio\Youtube`
+    - Vidéos Odysee : `C:\Users\dd200\Downloads\Video\Odysee`
+    - Audio Odysee : `C:\Users\dd200\Downloads\Audio\Odysee`
+    - Autres sites : `C:\Users\dd200\Downloads\Video\Generic` ou `C:\Users\dd200\Downloads\Audio\Generic`
+    - **Audio extrait de fichiers locaux** : Dans le dossier Audio correspondant si le fichier source est dans Video, sinon dans le même dossier
+8. Une fois le téléchargement terminé, l'explorateur de fichiers Windows s'ouvrira automatiquement pour afficher le fichier téléchargé
 
 ## Important pour les vidéos YouTube avec restriction d'âge
 

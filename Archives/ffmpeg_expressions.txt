@@ -1,2 +1,0 @@
-# mp4 to mp3
-ffmpeg -i chemin/vers/ta/video.mp4 -vn -acodec copy audio_extrait.mp3
