@@ -383,6 +383,83 @@ except Exception as e:
             )
 
 
+def detect_protected_sites(url):
+    """
+    Detect if the URL belongs to a protected site that requires yt-dlp specialized handling
+    Returns the site type or 'generic' if not protected
+    """
+    protected_sites = {
+        'm6.fr': 'm6',
+        'www.m6.fr': 'm6',
+        'm6plus.fr': 'm6',
+        'www.m6plus.fr': 'm6',
+        'tf1.fr': 'tf1', 
+        'www.tf1.fr': 'tf1',
+        'lci.tf1.fr': 'tf1',
+        'france.tv': 'francetv',
+        'www.france.tv': 'francetv',
+        'francetvinfo.fr': 'francetv',
+        'www.francetvinfo.fr': 'francetv',
+        '6play.fr': 'm6',
+        'www.6play.fr': 'm6',
+        'tf1play.fr': 'tf1',
+        'www.tf1play.fr': 'tf1',
+        'pluzz.francetv.fr': 'francetv'
+    }
+    
+    from urllib.parse import urlparse
+    domain = urlparse(url).netloc.lower()
+    
+    for site_domain, site_type in protected_sites.items():
+        if domain == site_domain or domain.endswith('.' + site_domain):
+            print(f"Protected site detected: {site_type} ({domain})")
+            return site_type
+    
+    return 'generic'
+
+
+def validate_downloaded_file(filepath, expected_min_size_mb=10):
+    """
+    Validate that the downloaded file is complete and not just a chunk
+    """
+    if not os.path.exists(filepath):
+        return False, "File does not exist"
+    
+    file_size_mb = os.path.getsize(filepath) / (1024 * 1024)
+    
+    if file_size_mb < expected_min_size_mb:
+        return False, f"File too small: {file_size_mb:.2f} MB (minimum: {expected_min_size_mb} MB)"
+    
+    # Try to detect if file is corrupted by checking first few bytes
+    try:
+        with open(filepath, 'rb') as f:
+            header = f.read(100)
+            if b'<html' in header.lower() or b'<!doctype' in header.lower():
+                return False, "File appears to be HTML (likely error page)"
+            
+            # Check if file starts with typical video file headers
+            video_headers = [
+                b'\x00\x00\x00\x20ftyp',  # MP4
+                b'\x00\x00\x00\x18ftyp',  # MP4
+                b'RIFF',                  # AVI/WAV
+                b'\x1a\x45\xdf\xa3',      # MKV
+                b'FWS',                   # Flash Video
+                b'FLV',                   # FLV
+                b'\x00\x00\x00\x20ftypmp4', # MP4 variant
+                b'\x00\x00\x00\x20ftypM4A', # M4A audio
+                b'\x00\x00\x00\x20ftypf4v', # FLV variant
+            ]
+            
+            is_valid_video = any(header.startswith(h) for h in video_headers)
+            if not is_valid_video:
+                return False, "File does not appear to be a valid video/audio format"
+    
+    except Exception as e:
+        return False, f"Error validating file: {e}"
+    
+    return True, f"File validation successful: {file_size_mb:.2f} MB"
+
+
 def get_available_video_qualities(available_formats):
     """
     Récupère les formats vidéo disponibles, limités à 1080p maximum.
@@ -593,13 +670,13 @@ def download_youtube_video(url):
                     if os.path.exists(local_path):
                         # Normaliser le titre de la vidéo pour la comparaison
                         normalized_title = (
-                            video_title.replace('"', "")
+                            (video_title or "").replace('"', "")
                             .replace(
                                 """, "")
-                            .replace(""",
+                            .replace(""", 
                                 "",
                             )
-                            .replace("＂", "")
+                            .replace("＇", "")
                         )
 
                         for file in os.listdir(local_path):
@@ -609,10 +686,10 @@ def download_youtube_video(url):
                                 file_name_without_ext.replace('"', "")
                                 .replace(
                                     """, "")
-                                .replace(""",
+                                .replace(""", 
                                     "",
                                 )
-                                .replace("＂", "")
+                                .replace("＇", "")
                             )
 
                             # Comparer les noms normalisés
@@ -764,9 +841,7 @@ def download_youtube_video(url):
                 # Pour l'audio, extraire l'audio et convertir en MP3
                 ydl_opts["extractaudio"] = True
                 ydl_opts["audioformat"] = "mp3"
-                ydl_opts["audioquality"] = (
-                    audio_bitrate  # Utiliser la qualité choisie par l'utilisateur
-                )
+                ydl_opts["audioquality"] = audio_bitrate  # Utiliser la qualité choisie par l'utilisateur
                 # Options supplémentaires pour la conversion audio
                 ydl_opts["postprocessors"] = [
                     {
@@ -1019,7 +1094,7 @@ def download_odysee_video(url):
             video_title = info.get("title", "video_odysee")
 
             # Nettoyer le titre pour le nom de fichier
-            clean_title = re.sub(r'[<>:"/\\|?*]', "_", video_title)
+            clean_title = re.sub(r'[<>:"/\\|?*]', "_", video_title or "video_odysee")
 
             # Déterminer l'extension en fonction du type de téléchargement
             file_ext = ".mp3" if download_type == "audio" else ".mp4"
@@ -1226,7 +1301,7 @@ def download_odysee_video(url):
 
                 # Chercher l'URL de la vidéo dans les métadonnées JSON-LD
                 script_tag = soup.find("script", type="application/ld+json")
-                if script_tag:
+                if script_tag and script_tag.string:
                     json_content = json.loads(script_tag.string)
                     video_url = json_content.get("contentUrl")
 
@@ -1336,6 +1411,244 @@ def download_local_audio(file_path):
         print(f"Erreur lors de l'extraction: {e}")
 
 
+def download_protected_site_video(url, site_type):
+    """
+    Download video from protected sites using yt-dlp specialized handling
+    Uses temporary directory to avoid yt-dlp cache issues
+    """
+    print(f"\nDownloading from protected site: {site_type}")
+    
+    # Determine final destination path
+    local_path = get_download_path("generic")
+    
+    # Create TEMPORARY directory to avoid yt-dlp cache
+    import tempfile
+    import shutil
+    import time
+    
+    temp_dir = None
+    try:
+        # Create unique temporary directory
+        temp_dir = tempfile.mkdtemp(prefix=f"ytdl_{site_type}_")
+        print(f"Using temporary directory: {temp_dir}")
+        
+        # Add cookies file if available
+        cookies_file = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "cookies.txt"
+        )
+        use_cookies = os.path.exists(cookies_file)
+        
+        # Options for protected sites - FORCE fresh download in temp dir
+        ydl_opts = {
+            'noplaylist': True,
+            'nocheckcertificate': True,
+            'ignoreerrors': False,  # Be strict for protected sites
+            'no_color': True,
+            'geo_bypass': True,
+            'geo_bypass_country': 'FR',  # Use France for French sites
+            'extractor_retries': 10,
+            'socket_timeout': 60,
+            'file_access_retries': 10,
+            'fragment_retries': 10,
+            'skip_unavailable_fragments': False,
+            'keep_fragments': False,
+            'extract_flat': False,
+            'write_info_json': False,
+            'write_sub': False,
+            'write_automatic_sub': False,
+            'ignore_subtitles': True,
+            'writethumbnail': False,
+            'write_description': False,
+            'write_duration': False,
+            'write_chapters': False,
+            'write_annotations': False,
+            'ffmpeg_location': r"C:\ffmpeg\bin",  # Add FFmpeg path
+            'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),  # Output to temp dir
+        }
+        
+        # Add site-specific options
+        if site_type == 'm6':
+            ydl_opts.update({
+                'extractor_args': {
+                    'm6': {
+                        'player_client': ['android', 'web'],
+                    }
+                },
+            })
+            # Force video download with ffmpeg conversion to MP4
+            ydl_opts.update({
+                'merge_output_format': 'mp4',
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                }],
+            })
+        elif site_type == 'tf1':
+            ydl_opts.update({
+                'extractor_args': {
+                    'tf1': {
+                        'player_client': ['android', 'web'],
+                    }
+                },
+            })
+            ydl_opts.update({
+                'merge_output_format': 'mp4',
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                }],
+            })
+        elif site_type == 'francetv':
+            ydl_opts.update({
+                'extractor_args': {
+                    'francetv': {
+                        'player_client': ['android', 'web'],
+                    }
+                },
+            })
+            ydl_opts.update({
+                'merge_output_format': 'mp4',
+                'postprocessors': [{
+                    'key': 'FFmpegVideoConvertor',
+                    'preferedformat': 'mp4',
+                }],
+            })
+        
+        if use_cookies:
+            ydl_opts['cookiefile'] = cookies_file
+            print(f"Using cookies: {cookies_file}")
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Extract video info first
+            print("Extracting video information...")
+            info = ydl.extract_info(url, download=False)
+            
+            video_title = info.get("title", f"video_{site_type}")
+            
+            # Download the video to temporary directory
+            print(f"Downloading: {video_title}")
+            ydl.download([url])
+            
+            # Find the downloaded file in temp directory
+            temp_files = [
+                f for f in os.listdir(temp_dir)
+                if f.endswith(('.mp4', '.m4a'))
+            ]
+            
+            if temp_files:
+                # Find the most recent video/audio file
+                temp_file_path = os.path.join(temp_dir, max(temp_files, key=lambda x: os.path.getctime(os.path.join(temp_dir, x))))
+                
+                # Get file size for validation
+                file_size_mb = os.path.getsize(temp_file_path) / (1024 * 1024)
+                print(f"Downloaded file found: {os.path.basename(temp_file_path)} ({file_size_mb:.2f} MB)")
+                
+                # Validate the download
+                is_valid, message = validate_downloaded_file(temp_file_path)
+                
+                if is_valid:
+                    # Generate clean filename for final destination
+                    clean_filename = re.sub(r'[<>:"/\\|?*]', "_", f"{video_title}.mp4")
+                    final_path = os.path.join(local_path, clean_filename)
+                    
+                    # Check if file exists at final destination and remove if needed
+                    if os.path.exists(final_path):
+                        try:
+                            os.remove(final_path)
+                            print(f"Removed existing file at destination: {clean_filename}")
+                        except Exception as e:
+                            print(f"Warning: Cannot remove existing file at destination: {e}")
+                    
+                    # Move file from temp to final destination
+                    shutil.move(temp_file_path, final_path)
+                    
+                    print("✅ Download completed successfully!")
+                    print(f"File saved in: {final_path}")
+                    print(f"File size: {file_size_mb:.2f} MB")
+                    open_file_explorer(final_path)
+                else:
+                    print(f"⚠️ Warning: Downloaded file validation failed: {message}")
+                    print("File found but appears corrupted or incomplete")
+                    # Still copy to final location for manual inspection
+                    if temp_file_path and os.path.exists(temp_file_path):
+                        clean_filename = re.sub(r'[<>:"/\\|?*]', "_", f"{video_title}_FAILED.mp4")
+                        final_path = os.path.join(local_path, clean_filename)
+                        shutil.move(temp_file_path, final_path)
+                        print(f"File saved in: {final_path} (for manual inspection)")
+            else:
+                print("❌ No downloaded file found in temporary directory!")
+                
+    finally:
+        # Always cleanup temporary directory
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+                print(f"Cleaned up temporary directory: {temp_dir}")
+            except Exception as e:
+                print(f"Warning: Could not cleanup temp directory: {e}")
+
+
+def download_generic_video_with_fallback(url):
+    """
+    Download video from generic URL with fallback to yt-dlp if generic method fails
+    """
+    print("\nAttempting download with generic method...")
+    local_path = get_download_path("generic")
+    
+    # Track the generic file to potentially remove it if fallback succeeds
+    generic_file_path = None
+    
+    try:
+        # Try the original generic download method first
+        download_generic_video(url)
+        
+        # Check if the downloaded file is valid
+        # Find the most recent file in the directory
+        files = [f for f in os.listdir(local_path) if f.endswith('.mp4')]
+        if files:
+            latest_file = os.path.join(local_path, max(files, key=lambda x: os.path.getctime(os.path.join(local_path, x))))
+            generic_file_path = latest_file  # Store to potentially remove later
+            is_valid, message = validate_downloaded_file(latest_file)
+            
+            if is_valid:
+                print(f"Generic download successful: {message}")
+                return
+            else:
+                print(f"Generic download failed validation: {message}")
+                print("Falling back to yt-dlp...")
+        else:
+            print("No file found after generic download, falling back to yt-dlp...")
+    
+    except Exception as e:
+        print(f"Generic download failed: {str(e)}")
+        print("Falling back to yt-dlp...")
+    
+    # Fallback to yt-dlp
+    try:
+        print("\nAttempting download with yt-dlp...")
+        site_type = detect_protected_sites(url)
+        
+        # Remove the generic file if it exists and is small (failed download)
+        if generic_file_path and os.path.exists(generic_file_path):
+            try:
+                file_size_mb = os.path.getsize(generic_file_path) / (1024 * 1024)
+                if file_size_mb < 10:  # If smaller than 10MB, it's likely a failed download
+                    os.remove(generic_file_path)
+                    print(f"Removed failed generic download: {os.path.basename(generic_file_path)} ({file_size_mb:.2f} MB)")
+                else:
+                    print(f"Keeping large generic file: {os.path.basename(generic_file_path)} ({file_size_mb:.2f} MB)")
+            except Exception as e:
+                print(f"Warning: Could not remove generic file: {e}")
+        
+        download_protected_site_video(url, site_type)
+    except Exception as e:
+        print(f"All download methods failed. Final error: {str(e)}")
+        print("Please check:")
+        print("1. The URL is valid and accessible")
+        print("2. Cookies are properly configured")
+        print("3. Internet connection is stable")
+
+
 def download_generic_video(url):
     """Télécharge une vidéo depuis une URL générique"""
     print("\nTéléchargement de la vidéo depuis une URL générique...")
@@ -1382,37 +1695,40 @@ def download_generic_video(url):
         script_tags = soup.find_all("script", type="application/ld+json")
         for script in script_tags:
             try:
-                json_content = json.loads(script.string)
-                if isinstance(json_content, dict):
-                    if "contentUrl" in json_content:
-                        video_sources.append(
-                            {"url": json_content["contentUrl"], "quality": "unknown"}
-                        )
-                    if "encodingFormat" in json_content:
-                        for format_info in json_content.get("encodingFormat", []):
-                            if isinstance(format_info, dict):
-                                url = format_info.get("contentUrl")
-                                quality = format_info.get("quality", "unknown")
-                                if url:
-                                    video_sources.append(
-                                        {"url": url, "quality": quality}
-                                    )
+                if script.string:
+                    json_content = json.loads(script.string)
+                    if isinstance(json_content, dict):
+                        if "contentUrl" in json_content:
+                            video_sources.append(
+                                {"url": json_content["contentUrl"], "quality": "unknown"}
+                            )
+                        if "encodingFormat" in json_content:
+                            for format_info in json_content.get("encodingFormat", []):
+                                if isinstance(format_info, dict):
+                                    url = format_info.get("contentUrl")
+                                    quality = format_info.get("quality", "unknown")
+                                    if url:
+                                        video_sources.append(
+                                            {"url": url, "quality": quality}
+                                        )
             except Exception:
                 continue
 
         # Chercher dans les balises vidéo et source
         video_tag = soup.find("video")
         if video_tag:
-            src = video_tag.get("src")
-            if src:
-                video_sources.append({"url": src, "quality": "unknown"})
-
-            source_tags = video_tag.find_all("source")
-            for source in source_tags:
-                src = source.get("src")
+            if hasattr(video_tag, 'get'):
+                src = video_tag.get("src")
                 if src:
-                    quality = source.get("size", "unknown")
-                    video_sources.append({"url": src, "quality": quality})
+                    video_sources.append({"url": src, "quality": "unknown"})
+
+                source_tags = video_tag.find_all("source")
+                for source in source_tags:
+                    if hasattr(source, 'get'):
+                        src = source.get("src")
+                        if src:
+                            quality = source.get("size", "unknown")
+                            video_sources.append({"url": src, "quality": quality})
 
         if not video_sources:
             print("Aucune source vidéo trouvée dans la page.")
@@ -1469,7 +1785,8 @@ def download_generic_video(url):
                 print(f"Fichier enregistré dans: {video_path}")
                 print(f"Taille : {total_size / (1024 * 1024):.2f} MB")
                 print(f"Temps total : {time.time() - start_time:.2f} secondes")
-                open_file_explorer(video_path)
+                # NOTE: Not opening explorer here to avoid opening folders with temporary files
+                # The fallback method will open explorer only if the final download succeeds
 
             except Exception as e:
                 print(f"Erreur pendant le téléchargement : {e}")
@@ -1481,7 +1798,7 @@ def download_generic_video(url):
     except Exception as e:
         print(f"Erreur lors du téléchargement générique : {str(e)}")
         # Nettoyer en cas d'erreur
-        if os.path.exists(video_path):
+        if 'video_path' in locals() and os.path.exists(video_path):
             os.remove(video_path)
 
 
@@ -1503,7 +1820,8 @@ def main():
         elif type_url == "local":
             download_local_audio(url)
         else:
-            download_generic_video(url)
+            # Use the new fallback method for generic URLs
+            download_generic_video_with_fallback(url)
     except Exception as e:
         print(f"Erreur lors du traitement : {e}")
 
