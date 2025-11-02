@@ -1464,6 +1464,7 @@ def download_protected_site_video(url, site_type):
             'write_annotations': False,
             'ffmpeg_location': r"C:\ffmpeg\bin",  # Add FFmpeg path
             'outtmpl': os.path.join(temp_dir, '%(title)s.%(ext)s'),  # Output to temp dir
+            'nooverwrites': True,  # Prevent yt-dlp from adding (1), (2), etc.
         }
         
         # Add site-specific options
@@ -1539,44 +1540,55 @@ def download_protected_site_video(url, site_type):
                 # Find the most recent video/audio file
                 temp_file_path = os.path.join(temp_dir, max(temp_files, key=lambda x: os.path.getctime(os.path.join(temp_dir, x))))
                 
+                # FIX: Remove (1), (2), etc. from filename if yt-dlp added them
+                downloaded_filename = os.path.basename(temp_file_path)
+                clean_filename_from_temp = downloaded_filename
+                
+                # Remove numbered suffixes like (1), (2), etc. that yt-dlp may add
+                import re
+                pattern = r'\s*\(\d+\)\.mp4$'
+                if re.search(pattern, clean_filename_from_temp):
+                    clean_filename_from_temp = re.sub(pattern, '.mp4', clean_filename_from_temp)
+                    print(f"Removed automatic numbering from yt-dlp filename: {downloaded_filename} -> {clean_filename_from_temp}")
+                
+                # Create final clean filename
+                clean_final_filename = re.sub(r'[<>:"/\\|?*]', "_", clean_filename_from_temp)
+                final_path = os.path.join(local_path, clean_final_filename)
+                
                 # Get file size for validation
                 file_size_mb = os.path.getsize(temp_file_path) / (1024 * 1024)
-                print(f"Downloaded file found: {os.path.basename(temp_file_path)} ({file_size_mb:.2f} MB)")
+                print(f"Downloaded file found: {downloaded_filename} ({file_size_mb:.2f} MB)")
                 
                 # Validate the download
                 is_valid, message = validate_downloaded_file(temp_file_path)
                 
                 if is_valid:
-                    # Generate clean filename for final destination
-                    clean_filename = re.sub(r'[<>:"/\\|?*]', "_", f"{video_title}.mp4")
-                    final_path = os.path.join(local_path, clean_filename)
-                    
                     # Check if file exists at final destination and remove if needed
                     if os.path.exists(final_path):
                         try:
                             os.remove(final_path)
-                            print(f"Removed existing file at destination: {clean_filename}")
+                            print(f"Removed existing file at destination: {clean_final_filename}")
                         except Exception as e:
                             print(f"Warning: Cannot remove existing file at destination: {e}")
                     
                     # Move file from temp to final destination
                     shutil.move(temp_file_path, final_path)
                     
-                    print("✅ Download completed successfully!")
+                    print("[SUCCESS] Download completed successfully!")
                     print(f"File saved in: {final_path}")
                     print(f"File size: {file_size_mb:.2f} MB")
                     open_file_explorer(final_path)
                 else:
-                    print(f"⚠️ Warning: Downloaded file validation failed: {message}")
+                    print(f"[WARNING] Downloaded file validation failed: {message}")
                     print("File found but appears corrupted or incomplete")
                     # Still copy to final location for manual inspection
                     if temp_file_path and os.path.exists(temp_file_path):
-                        clean_filename = re.sub(r'[<>:"/\\|?*]', "_", f"{video_title}_FAILED.mp4")
-                        final_path = os.path.join(local_path, clean_filename)
+                        failed_filename = re.sub(r'[<>:"/\\|?*]', "_", f"{video_title}_FAILED.mp4")
+                        final_path = os.path.join(local_path, failed_filename)
                         shutil.move(temp_file_path, final_path)
                         print(f"File saved in: {final_path} (for manual inspection)")
             else:
-                print("❌ No downloaded file found in temporary directory!")
+                print("[ERROR] No downloaded file found in temporary directory!")
                 
     finally:
         # Always cleanup temporary directory
@@ -1591,23 +1603,38 @@ def download_protected_site_video(url, site_type):
 def download_generic_video_with_fallback(url):
     """
     Download video from generic URL with fallback to yt-dlp if generic method fails
+    OPTIMIZED: Skip generic method for protected sites
     """
+    # Check if it's a protected site FIRST - don't waste time with generic method
+    site_type = detect_protected_sites(url)
+    
+    if site_type != 'generic':
+        print(f"\nProtected site detected: {site_type} ({url})")
+        print("Skipping generic method - using specialized yt-dlp...")
+        
+        # Use yt-dlp directly for protected sites (more efficient)
+        try:
+            download_protected_site_video(url, site_type)
+        except Exception as e:
+            print(f"Download failed for protected site: {str(e)}")
+            print("Please check:")
+            print("1. The URL is valid and accessible")
+            print("2. Cookies are properly configured")
+            print("3. Internet connection is stable")
+        return
+    
+    # Only use generic method for truly generic/unprotected sites
     print("\nAttempting download with generic method...")
     local_path = get_download_path("generic")
     
-    # Track the generic file to potentially remove it if fallback succeeds
-    generic_file_path = None
-    
     try:
-        # Try the original generic download method first
+        # Try the original generic download method
         download_generic_video(url)
         
         # Check if the downloaded file is valid
-        # Find the most recent file in the directory
         files = [f for f in os.listdir(local_path) if f.endswith('.mp4')]
         if files:
             latest_file = os.path.join(local_path, max(files, key=lambda x: os.path.getctime(os.path.join(local_path, x))))
-            generic_file_path = latest_file  # Store to potentially remove later
             is_valid, message = validate_downloaded_file(latest_file)
             
             if is_valid:
@@ -1623,23 +1650,10 @@ def download_generic_video_with_fallback(url):
         print(f"Generic download failed: {str(e)}")
         print("Falling back to yt-dlp...")
     
-    # Fallback to yt-dlp
+    # Fallback to yt-dlp for generic sites that failed
     try:
         print("\nAttempting download with yt-dlp...")
         site_type = detect_protected_sites(url)
-        
-        # Remove the generic file if it exists and is small (failed download)
-        if generic_file_path and os.path.exists(generic_file_path):
-            try:
-                file_size_mb = os.path.getsize(generic_file_path) / (1024 * 1024)
-                if file_size_mb < 10:  # If smaller than 10MB, it's likely a failed download
-                    os.remove(generic_file_path)
-                    print(f"Removed failed generic download: {os.path.basename(generic_file_path)} ({file_size_mb:.2f} MB)")
-                else:
-                    print(f"Keeping large generic file: {os.path.basename(generic_file_path)} ({file_size_mb:.2f} MB)")
-            except Exception as e:
-                print(f"Warning: Could not remove generic file: {e}")
-        
         download_protected_site_video(url, site_type)
     except Exception as e:
         print(f"All download methods failed. Final error: {str(e)}")
