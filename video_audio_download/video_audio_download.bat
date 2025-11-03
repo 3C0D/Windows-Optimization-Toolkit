@@ -2,26 +2,35 @@
 chcp 65001 > nul
 setlocal enabledelayedexpansion
 
-:: Define the path to the virtual environment
-set VENV_PATH=%~dp0venv
+echo ================================================
+echo  Video/Audio Downloader - UV Edition
+echo ================================================
+echo.
 
-:: Check if the virtual environment exists, create it if not
-if not exist "%VENV_PATH%" (
-    echo Création de l'environnement virtuel et installation des bibliothèques...
-    echo Cette opération prendra environ 30 secondes, veuillez patienter...
-    python -m venv "%VENV_PATH%"
+REM Check if UV is installed
+where uv >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] UV is not installed!
+    echo.
+    echo To install UV, run in PowerShell:
+    echo   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+    echo.
+    echo Or visit: https://docs.astral.sh/uv/getting-started/installation/
+    pause
+    exit /b 1
 )
 
-:: Activate the virtual environment
-call "%VENV_PATH%\Scripts\activate"
+REM Sync dependencies (creates venv if needed, installs/updates packages)
+echo Installing/updating dependencies...
+uv sync
 
-:: Les mises à jour de yt-dlp et l'exportation des cookies sont maintenant gérées par le script Python
+REM Run the script with UV
+echo.
+echo Starting the downloader...
+echo ================================================
+echo.
+uv run python download_video_audio.py
 
-:: Run the Python script
-python "%~dp0download_video_audio.py"
-
-:: Pause to view results
+echo.
+echo ================================================
 pause
-
-:: Deactivate the virtual environment
-deactivate

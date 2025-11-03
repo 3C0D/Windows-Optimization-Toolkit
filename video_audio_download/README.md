@@ -1,5 +1,41 @@
 # Outil de Téléchargement de Vidéos et d'Audio
 
+## Installation avec UV (Recommandé)
+
+### Installation de UV
+
+**Windows (PowerShell):**
+```powershell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**Linux/macOS:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Utilisation
+
+1. **Premier lancement** : Double-cliquez sur `video_audio_download.bat`
+   - UV créera automatiquement l'environnement virtuel
+   - Installera toutes les dépendances nécessaires
+   - Lancera le script
+
+2. **Lancements suivants** : Même commande, UV vérifie et met à jour si nécessaire
+
+3. **Mise à jour manuelle** (optionnel) :
+   ```bash
+   uv sync --upgrade
+   ```
+
+### Avantages de UV
+- ⚡ Installation 10-100x plus rapide que pip
+- 🔄 Gestion automatique de l'environnement virtuel
+- 🔒 Résolution déterministe des dépendances
+- 🎯 Compatible avec requirements.txt et pyproject.toml
+
+---
+
 Cet outil permet de télécharger facilement des vidéos ou de l'audio (MP3) depuis YouTube, Odysee et d'autres sites web en utilisant l'URL dans le presse-papier.
 
 ## Fonctionnalités

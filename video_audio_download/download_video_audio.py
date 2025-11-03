@@ -4,74 +4,51 @@ import os
 import re
 import time
 import json
-import importlib.metadata
+import zipfile
+import hashlib
+import urllib.request
+import http.cookiejar
+import tempfile
+import shutil
+from pathlib import Path
+from urllib.parse import urlparse
 
-# Import pour accéder au registre Windows (pour obtenir le dossier Téléchargements)
+# Import to access Windows registry (to get Downloads folder)
 if sys.platform == "win32":
     import winreg
 
-
-def read_requirements():
-    """Lire les packages requis dans le fichier de requirements"""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    requirements_path = os.path.join(script_dir, "requirements.txt")
-
-    required_packages = set()
-    with open(requirements_path, "r") as file:
-        for line in file:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                package_name = line.split("==")[0].split("<")[0].split(">")[0].strip()
-                required_packages.add(package_name.lower())
-    return required_packages
-
-
-def install_modules(missing_modules):
-    """Installer les modules requis dans l'environnement virtuel"""
-    if missing_modules:
-        print(f"\nInstallation des modules manquants: {', '.join(missing_modules)}")
-        print("Cette opération peut prendre de 1 à 2 minutes, veuillez patienter...")
-    else:
-        print("\nMise à jour des modules...")
-
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    venv_path = os.path.join(script_dir, "venv")
-    requirements_path = os.path.join(script_dir, "requirements.txt")
-
-    pip_path = (
-        os.path.join(venv_path, "Scripts", "pip")
-        if sys.platform == "win32"
-        else os.path.join(venv_path, "bin", "pip")
-    )
-    # Utiliser -q pour réduire la verbosité
-    subprocess.check_call([pip_path, "install", "-q", "-r", requirements_path])
-
+# Import necessary modules directly
+import pyperclip
+import yt_dlp
+from bs4 import BeautifulSoup
+from tqdm import tqdm
+import requests
+import browser_cookie3
 
 def open_file_explorer(path):
     """
-    Ouvre l'explorateur de fichiers Windows à l'emplacement spécifié.
+    Open Windows file explorer at specified location.
 
     Args:
-        path (str): Chemin du fichier ou du dossier à ouvrir
+        path (str): Path of file or folder to open
     """
-    # Normaliser le chemin pour éviter les problèmes avec les barres obliques
+    # Normalize path to avoid issues with slashes
     normalized_path = os.path.normpath(path)
 
-    # Essayer d'ouvrir l'explorateur de fichiers directement
+    # Try to open file explorer directly
     try:
-        # Vérifier si c'est un fichier ou un dossier
+        # Check if it's a file or folder
         if os.path.isfile(normalized_path):
-            # Ouvrir le dossier contenant le fichier et sélectionner le fichier
+            # Open folder containing file and select the file
             subprocess.Popen(f'explorer /select,"{normalized_path}"', shell=True)
         else:
-            # Ouvrir directement le dossier
+            # Open folder directly
             subprocess.Popen(f'explorer "{normalized_path}"', shell=True)
     except Exception as e:
         print(
-            f"Note: Impossible d'ouvrir automatiquement l'explorateur de fichiers: {e}"
+            f"Note: Unable to automatically open file explorer: {e}"
         )
-        print(f"Chemin du fichier: {normalized_path}")
-
+        print(f"File path: {normalized_path}")
 
 def get_windows_downloads_folder():
     """
@@ -151,12 +128,94 @@ def get_download_path(source_type):
     return path
 
 
-def update_yt_dlp():
-    """Mettre à jour yt-dlp vers la version stable"""
+def check_and_export_cookies():
+    """Check if cookies.txt file exists, otherwise export from Chrome"""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    cookies_file = os.path.join(script_dir, "cookies.txt")
+
+    if os.path.exists(cookies_file):
+        # Cookie file already exists, check if it's valid
+        try:
+            import http.cookiejar
+
+            cookie_jar = http.cookiejar.MozillaCookieJar(cookies_file)
+            cookie_jar.load()
+            # If we get here, the file is valid
+            print("\nCookies file already present and valid.")
+            return
+        except Exception:
+            # File exists but is not valid, recreate it
+            try:
+                os.remove(cookies_file)
+                print(
+                    "\nCorrupted cookies file detected and deleted. Attempting to recreate..."
+                )
+            except Exception:
+                pass
+
+    # If we get here, either file doesn't exist or was corrupted and deleted
+    print("\nChecking YouTube cookies...")
+    print(
+        "Cookies allow access to age-restricted videos and private content."
+    )
+
+    # If we get here, cookies need to be exported
     try:
-        print("\nVérification des mises à jour pour yt-dlp...")
+        print("\nExporting cookies from Chrome...")
+        # Create an empty but valid cookie file
+        cookie_jar = http.cookiejar.MozillaCookieJar(cookies_file)
+
+        try:
+            # Try with Chrome first
+            cookies = browser_cookie3.chrome(domain_name=".youtube.com")
+            for cookie in cookies:
+                cookie_jar.set_cookie(cookie)
+            cookie_jar.save()
+            print("Cookies exported successfully from Chrome.")
+        except Exception as chrome_error:
+            # If Chrome fails, create an empty but valid cookie file
+            print(
+                f"Error exporting cookies from Chrome: {chrome_error}"
+            )
+            print("Creating empty but valid cookie file...")
+
+            # Create Netscape format cookie file header
+            with open(cookies_file, "w") as f:
+                f.write("# Netscape HTTP Cookie File\n")
+                f.write("# https://curl.haxx.se/docs/http-cookies.html\n")
+                f.write(
+                    "# This file was generated by yt-dlp! Edit at your own risk.\n\n"
+                )
+
+            print("Empty cookie file created successfully.")
+            print(
+                "\nWarning: Without valid cookies, age-restricted videos will not be accessible."
+            )
+            print(
+                "You can continue using the script for videos without restrictions."
+            )
+    except Exception as e:
+        print(f"Error managing cookies: {e}")
+        print("\nTo use YouTube cookies, you must:")
+        print("1. Log in to your YouTube account via Chrome browser")
+        print("2. Keep your session active in Chrome")
+        print("3. Rerun this script")
+        print("\nNote: Only Chrome cookies are supported for now.")
+
+# Import necessary modules directly
+import pyperclip
+import yt_dlp
+from bs4 import BeautifulSoup
+from tqdm import tqdm
+import requests
+import browser_cookie3
+
+def update_yt_dlp():
+    """Update yt-dlp to stable version"""
+    try:
+        print("\nChecking for yt-dlp updates...")
         print(
-            "Les mises à jour régulières sont nécessaires pour contourner les changements d'API de YouTube."
+            "Regular updates are necessary to bypass YouTube API changes."
         )
         # Use pip to update yt-dlp since it was installed via pip
         result = subprocess.run(
@@ -170,221 +229,13 @@ def update_yt_dlp():
                 "already up-to-date" in result.stdout.lower()
                 or "already satisfied" in result.stdout.lower()
             ):
-                print("yt-dlp est déjà à jour.")
+                print("yt-dlp is already up to date.")
             else:
-                print("yt-dlp a été mis à jour avec succès.")
+                print("yt-dlp has been successfully updated.")
         else:
-            print(f"Erreur lors de la mise à jour de yt-dlp: {result.stderr}")
+            print(f"Error updating yt-dlp: {result.stderr}")
     except Exception as e:
-        print(f"Erreur lors de la mise à jour de yt-dlp: {e}")
-
-
-def check_and_export_cookies():
-    """Vérifier si le fichier cookies.txt existe, sinon l'exporter depuis Chrome"""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    cookies_file = os.path.join(script_dir, "cookies.txt")
-
-    if os.path.exists(cookies_file):
-        # Le fichier de cookies existe déjà, vérifier s'il est valide
-        try:
-            import http.cookiejar
-
-            cookie_jar = http.cookiejar.MozillaCookieJar(cookies_file)
-            cookie_jar.load()
-            # Si on arrive ici, le fichier est valide
-            print("\nFichier de cookies déjà présent et valide.")
-            return
-        except Exception:
-            # Le fichier existe mais n'est pas valide, on va le recréer
-            try:
-                os.remove(cookies_file)
-                print(
-                    "\nFichier de cookies corrompu détecté et supprimé. Tentative de recréation..."
-                )
-            except Exception:
-                pass
-
-    # Si on arrive ici, soit le fichier n'existe pas, soit il était corrompu et a été supprimé
-    print("\nVérification des cookies YouTube...")
-    print(
-        "Les cookies permettent d'accéder aux vidéos avec restriction d'âge et aux contenus privés."
-    )
-
-    # Si on arrive ici, il faut exporter les cookies
-    try:
-        print("\nExportation des cookies depuis Chrome...")
-        # Import des modules nécessaires pour l'exportation des cookies
-        import browser_cookie3
-        import http.cookiejar
-
-        # Créer un fichier de cookies vide mais valide
-        cookie_jar = http.cookiejar.MozillaCookieJar(cookies_file)
-
-        try:
-            # Essayer d'abord avec Chrome
-            cookies = browser_cookie3.chrome(domain_name=".youtube.com")
-            for cookie in cookies:
-                cookie_jar.set_cookie(cookie)
-            cookie_jar.save()
-            print("Cookies exportés avec succès depuis Chrome.")
-        except Exception as chrome_error:
-            # Si ça échoue avec Chrome, créer un fichier de cookies vide mais valide
-            print(
-                f"Erreur lors de l'exportation des cookies depuis Chrome: {chrome_error}"
-            )
-            print("Création d'un fichier de cookies vide mais valide...")
-
-            # Créer l'en-tête du fichier cookies.txt au format Netscape
-            with open(cookies_file, "w") as f:
-                f.write("# Netscape HTTP Cookie File\n")
-                f.write("# https://curl.haxx.se/docs/http-cookies.html\n")
-                f.write(
-                    "# This file was generated by yt-dlp! Edit at your own risk.\n\n"
-                )
-
-            print("Fichier de cookies vide créé avec succès.")
-            print(
-                "\nAttention: Sans cookies valides, les vidéos avec restriction d'âge ne seront pas accessibles."
-            )
-            print(
-                "Vous pouvez continuer à utiliser le script pour les vidéos sans restriction."
-            )
-    except Exception as e:
-        print(f"Erreur lors de la gestion des cookies: {e}")
-        print("\nPour utiliser les cookies YouTube, vous devez:")
-        print("1. Vous connecter à votre compte YouTube via le navigateur Chrome")
-        print("2. Garder votre session active dans Chrome")
-        print("3. Relancer ce script")
-        print("\nNote: Seuls les cookies de Chrome sont supportés pour le moment.")
-
-
-def check_and_install_modules():
-    """Vérifier si les modules requis sont installés et les installer si nécessaire"""
-    required = read_requirements()
-
-    # Supprimer importlib-metadata de la liste des modules requis car il est intégré à Python 3.8+
-    if "importlib-metadata" in required:
-        required.remove("importlib-metadata")
-
-    # Obtenir la liste des packages installés
-    installed = {
-        pkg.metadata["Name"].lower() for pkg in importlib.metadata.distributions()
-    }
-    missing = required - installed
-
-    if missing:
-        install_modules(missing)
-        print("Modules manquants installés avec succès.")
-    else:
-        # Vérifier si une mise à jour est nécessaire (tous les 30 jours)
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        last_update_file = os.path.join(script_dir, ".last_update")
-        current_time = time.time()
-        update_needed = True
-
-        if os.path.exists(last_update_file):
-            try:
-                with open(last_update_file, "r") as f:
-                    last_update = float(f.read().strip())
-                    # Si la dernière mise à jour date de moins de 30 jours, pas besoin de mettre à jour
-                    if (
-                        current_time - last_update < 30 * 24 * 60 * 60
-                    ):  # 30 jours en secondes
-                        update_needed = False
-            except Exception:
-                pass  # En cas d'erreur, on procède à la mise à jour
-
-        if update_needed:
-            print("\nVérification périodique des modules...")
-            install_modules(missing)  # missing est vide ici
-            # Enregistrer la date de la mise à jour
-            try:
-                with open(last_update_file, "w") as f:
-                    f.write(str(current_time))
-            except Exception:
-                pass  # Ignorer les erreurs d'écriture
-        else:
-            print("\nTous les modules sont à jour.")
-
-
-# Vérifier et installer les modules nécessaires
-try:
-    check_and_install_modules()
-    print("\nVérification des modules terminée avec succès.")
-except Exception as e:
-    print(
-        f"\nAttention: Problème lors de la vérification/installation des modules: {e}"
-    )
-    print(
-        "Le script va continuer, mais certaines fonctionnalités pourraient ne pas fonctionner correctement."
-    )
-    print(
-        "Si vous rencontrez des erreurs, essayez d'installer manuellement les modules requis:"
-    )
-    print("pip install -r requirements.txt")
-
-# Importer les modules nécessaires
-try:
-    import pyperclip  # type: ignore
-    import yt_dlp  # type: ignore
-    from bs4 import BeautifulSoup  # type: ignore
-    from tqdm import tqdm  # type: ignore
-    import requests  # type: ignore
-except ImportError as e:
-    print(f"\nErreur critique lors de l'importation des modules: {e}")
-    print("Certains modules nécessaires ne sont pas disponibles.")
-    print("Veuillez installer manuellement les modules requis et réessayer:")
-    print("pip install -r requirements.txt")
-    sys.exit(1)
-
-# Mettre à jour yt-dlp et exporter les cookies après l'installation des modules
-try:
-    update_yt_dlp()
-except Exception:
-    print("\nAttention: Impossible de mettre à jour yt-dlp.")
-    print("Le téléchargement pourrait échouer si yt-dlp n'est pas à jour.")
-
-# Essayer d'exporter les cookies, mais continuer même en cas d'échec
-try:
-    check_and_export_cookies()
-except Exception as e:
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    cookies_file = os.path.join(script_dir, "cookies.txt")
-
-    # Vérifier si le fichier de cookies existe malgré l'erreur
-    if os.path.exists(cookies_file):
-        print(
-            "\nAttention: Problème lors de la vérification des cookies, mais un fichier de cookies existe."
-        )
-        print(
-            "Le script va continuer, mais certaines vidéos avec restriction d'âge pourraient être inaccessibles."
-        )
-    else:
-        # Créer un fichier de cookies vide mais valide
-        try:
-            print("\nCréation d'un fichier de cookies vide mais valide...")
-            with open(cookies_file, "w") as f:
-                f.write("# Netscape HTTP Cookie File\n")
-                f.write("# https://curl.haxx.se/docs/http-cookies.html\n")
-                f.write(
-                    "# This file was generated by yt-dlp! Edit at your own risk.\n\n"
-                )
-            print("Fichier de cookies vide créé avec succès.")
-            print(
-                "\nAttention: Sans cookies valides, les vidéos avec restriction d'âge ne seront pas accessibles."
-            )
-            print(
-                "Vous pouvez continuer à utiliser le script pour les vidéos sans restriction."
-            )
-        except Exception as cookie_error:
-            print(f"\nErreur lors de la création du fichier de cookies: {cookie_error}")
-            print(
-                "Sans cookies, les vidéos avec restriction d'âge ne seront pas accessibles."
-            )
-            print(
-                "Le script va continuer, mais certaines fonctionnalités pourraient être limitées."
-            )
-
+        print(f"Error updating yt-dlp: {e}")
 
 def detect_protected_sites(url):
     """
