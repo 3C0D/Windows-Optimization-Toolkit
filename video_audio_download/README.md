@@ -5,11 +5,13 @@
 ### Installation de UV
 
 **Windows (PowerShell):**
+
 ```powershell
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
 **Linux/macOS:**
+
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
@@ -24,15 +26,17 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 2. **Lancements suivants** : Même commande, UV vérifie et met à jour si nécessaire
 
 3. **Mise à jour manuelle** (optionnel) :
+
    ```bash
    uv sync --upgrade
    ```
 
 ### Avantages de UV
+
 - ⚡ Installation 10-100x plus rapide que pip
 - 🔄 Gestion automatique de l'environnement virtuel
 - 🔒 Résolution déterministe des dépendances
-- 🎯 Compatible avec requirements.txt et pyproject.toml
+- 🎯 Utilise pyproject.toml comme source unique des dépendances
 
 ---
 
@@ -116,7 +120,7 @@ Si les problèmes persistent, essayez de supprimer le dossier `venv` et relancez
 
 - `video_audio_download.bat` : Script batch pour lancer l'outil
 - `download_video_audio.py` : Script Python principal
-- `requirements.txt` : Liste des dépendances Python
+- `pyproject.toml` : Configuration des dépendances Python
 - `cookies.txt` : Fichier de cookies exporté (créé automatiquement)
 
 ## Dépendances

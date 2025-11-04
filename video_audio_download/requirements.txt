@@ -1,7 +1,0 @@
-# Dépendances pour le module de téléchargement de vidéos
-yt-dlp>=2023.3.4
-pyperclip>=1.8.2
-beautifulsoup4>=4.11.1
-requests>=2.28.1
-tqdm>=4.64.1
-browser-cookie3>=0.16.2

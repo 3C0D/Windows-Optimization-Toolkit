@@ -4,26 +4,22 @@ import os
 import re
 import time
 import json
-import zipfile
-import hashlib
-import urllib.request
-import http.cookiejar
 import tempfile
+import http.cookiejar
 import shutil
-from pathlib import Path
+
 from urllib.parse import urlparse
-
-# Import to access Windows registry (to get Downloads folder)
-if sys.platform == "win32":
-    import winreg
-
-# Import necessary modules directly
 import pyperclip
 import yt_dlp
 from bs4 import BeautifulSoup
 from tqdm import tqdm
 import requests
 import browser_cookie3
+
+# Platform specific
+if sys.platform == "win32":
+    import winreg
+
 
 def open_file_explorer(path):
     """
@@ -136,8 +132,6 @@ def check_and_export_cookies():
     if os.path.exists(cookies_file):
         # Cookie file already exists, check if it's valid
         try:
-            import http.cookiejar
-
             cookie_jar = http.cookiejar.MozillaCookieJar(cookies_file)
             cookie_jar.load()
             # If we get here, the file is valid
@@ -202,14 +196,6 @@ def check_and_export_cookies():
         print("3. Rerun this script")
         print("\nNote: Only Chrome cookies are supported for now.")
 
-# Import necessary modules directly
-import pyperclip
-import yt_dlp
-from bs4 import BeautifulSoup
-from tqdm import tqdm
-import requests
-import browser_cookie3
-
 def update_yt_dlp():
     """Update yt-dlp to stable version"""
     try:
@@ -261,7 +247,7 @@ def detect_protected_sites(url):
         "pluzz.francetv.fr": "francetv",
     }
 
-    from urllib.parse import urlparse
+
 
     domain = urlparse(url).netloc.lower()
 
@@ -1293,9 +1279,6 @@ def download_protected_site_video(url, site_type):
     local_path = get_download_path("generic")
 
     # Create TEMPORARY directory to avoid yt-dlp cache
-    import tempfile
-    import shutil
-    import time
 
     temp_dir = None
     try:
@@ -1546,8 +1529,6 @@ def download_protected_site_video(url, site_type):
                 clean_filename_from_temp = downloaded_filename
 
                 # Remove numbered suffixes like (1), (2), etc.
-                import re
-
                 pattern = r"\s*\(\d+\)(\.\w+)$"
                 if re.search(pattern, clean_filename_from_temp):
                     clean_filename_from_temp = re.sub(
@@ -1596,7 +1577,7 @@ def download_protected_site_video(url, site_type):
                     if os.path.exists(final_path):
                         try:
                             os.remove(final_path)
-                            print(f"Removed existing file at destination")
+                            print("Removed existing file at destination")
                         except Exception as e:
                             print(f"Warning: Cannot remove existing file: {e}")
 
@@ -1639,7 +1620,7 @@ def download_protected_site_video(url, site_type):
         if temp_dir and os.path.exists(temp_dir):
             try:
                 shutil.rmtree(temp_dir)
-                print(f"\n🧹 Cleaned up temp directory")
+                print("\n🧹 Cleaned up temp directory")
             except Exception as e:
                 print(f"Warning: Cleanup failed: {e}")
 
