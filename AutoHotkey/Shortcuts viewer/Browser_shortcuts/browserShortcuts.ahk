@@ -30,6 +30,7 @@ openInAI() {
     ; === ASSISTANTS GÉNÉRALISTES ===
     aiMenu.Add("Claude", (*) => Run("https://claude.ai"))
     aiMenu.Add("ChatGPT", (*) => Run("https://chatgpt.com/"))
+    aiMenu.Add("Ernie", (*) => Run("https://ernie.baidu.com/"))
     aiMenu.Add("Gemini", (*) => Run("https://gemini.google.com/app"))
     aiMenu.Add("Copilot", (*) => Run("https://copilot.microsoft.com"))
     aiMenu.Add("Perplexity", (*) => Run("https://www.perplexity.ai/"))
