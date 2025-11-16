@@ -1502,6 +1502,8 @@ def download_protected_site_video(url, site_type):
 
         # Now proceed with actual download
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Extract info for the video title
+            info = ydl.extract_info(url, download=False)
             video_title = info.get("title", f"video_{site_type}")
 
             print(f"\nDownloading: {video_title}")
@@ -1609,9 +1611,20 @@ def download_protected_site_video(url, site_type):
                 print("Download completely failed.")
 
     except Exception as e:
-        print(f"\n❌ ERROR: {str(e)}")
+        error_msg = str(e)
+        print(f"\n❌ ERROR: {error_msg}")
+        
+        # Handle specific yt-dlp errors
+        if "Unknown algorithm ID" in error_msg:
+            print("\n⚠️  YT-DLP VERSION ISSUE DETECTED")
+            print("This error indicates that your yt-dlp version doesn't support this site.")
+            print("Please update yt-dlp:")
+            print("  1. Open Command Prompt as Administrator")
+            print("  2. Run: python -m pip install --upgrade yt-dlp")
+            print("  3. Or: pip install --upgrade yt-dlp")
+            print("\nAlternatively, the site might be blocking downloads.")
+            
         import traceback
-
         print("\nFull traceback:")
         traceback.print_exc()
 
