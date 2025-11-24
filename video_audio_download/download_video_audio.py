@@ -41,10 +41,9 @@ def open_file_explorer(path):
             # Open folder directly
             subprocess.Popen(f'explorer "{normalized_path}"', shell=True)
     except Exception as e:
-        print(
-            f"Note: Unable to automatically open file explorer: {e}"
-        )
+        print(f"Note: Unable to automatically open file explorer: {e}")
         print(f"File path: {normalized_path}")
+
 
 def get_windows_downloads_folder():
     """
@@ -149,9 +148,7 @@ def check_and_export_cookies():
 
     # If we get here, either file doesn't exist or was corrupted and deleted
     print("\nChecking YouTube cookies...")
-    print(
-        "Cookies allow access to age-restricted videos and private content."
-    )
+    print("Cookies allow access to age-restricted videos and private content.")
 
     # If we get here, cookies need to be exported
     try:
@@ -168,9 +165,7 @@ def check_and_export_cookies():
             print("Cookies exported successfully from Chrome.")
         except Exception as chrome_error:
             # If Chrome fails, create an empty but valid cookie file
-            print(
-                f"Error exporting cookies from Chrome: {chrome_error}"
-            )
+            print(f"Error exporting cookies from Chrome: {chrome_error}")
             print("Creating empty but valid cookie file...")
 
             # Create Netscape format cookie file header
@@ -185,9 +180,7 @@ def check_and_export_cookies():
             print(
                 "\nWarning: Without valid cookies, age-restricted videos will not be accessible."
             )
-            print(
-                "You can continue using the script for videos without restrictions."
-            )
+            print("You can continue using the script for videos without restrictions.")
     except Exception as e:
         print(f"Error managing cookies: {e}")
         print("\nTo use YouTube cookies, you must:")
@@ -196,13 +189,12 @@ def check_and_export_cookies():
         print("3. Rerun this script")
         print("\nNote: Only Chrome cookies are supported for now.")
 
+
 def update_yt_dlp():
     """Update yt-dlp to stable version"""
     try:
         print("\nChecking for yt-dlp updates...")
-        print(
-            "Regular updates are necessary to bypass YouTube API changes."
-        )
+        print("Regular updates are necessary to bypass YouTube API changes.")
         # Use pip to update yt-dlp since it was installed via pip
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"],
@@ -222,6 +214,7 @@ def update_yt_dlp():
             print(f"Error updating yt-dlp: {result.stderr}")
     except Exception as e:
         print(f"Error updating yt-dlp: {e}")
+
 
 def detect_protected_sites(url):
     """
@@ -245,9 +238,9 @@ def detect_protected_sites(url):
         "tf1play.fr": "tf1",
         "www.tf1play.fr": "tf1",
         "pluzz.francetv.fr": "francetv",
+        "rumble.com": "rumble",
+        "www.rumble.com": "rumble",
     }
-
-
 
     domain = urlparse(url).netloc.lower()
 
@@ -1267,6 +1260,88 @@ def download_local_audio(file_path):
         print(f"Erreur lors de l'extraction: {e}")
 
 
+def download_rumble_video(url):
+    """
+    Download video from Rumble using yt-dlp CLI with browser impersonation
+    Rumble requires --impersonate flag which works better via CLI than Python API
+    """
+    print("\nDownloading from Rumble...")
+    print("Using browser impersonation to bypass anti-bot protection...")
+
+    local_path = get_download_path("generic")
+
+    # Build yt-dlp command with impersonation
+    cmd = [
+        sys.executable,
+        "-m",
+        "yt_dlp",
+        "--impersonate",
+        "chrome-116",  # Use specific Chrome version (Windows-10)
+        # Don't specify format - let yt-dlp choose the best automatically
+        "--output",
+        os.path.join(local_path, "%(title)s.%(ext)s"),
+        "--ffmpeg-location",
+        r"C:\ffmpeg\bin",
+        "--no-playlist",
+        "--merge-output-format",
+        "mp4",
+        url,
+    ]
+
+    # Add cookies if available
+    cookies_file = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "cookies.txt"
+    )
+    if os.path.exists(cookies_file):
+        cmd.extend(["--cookies", cookies_file])
+        print(f"Using cookies: {cookies_file}")
+
+    try:
+        print("\nStarting download...")
+        print("(You can press Ctrl+C to stop)")
+
+        # Run yt-dlp command
+        result = subprocess.run(
+            cmd,
+            check=False,
+            text=True,
+            capture_output=False,  # Show output in real-time
+        )
+
+        if result.returncode == 0:
+            print("\n✅ Download completed successfully!")
+
+            # Find the downloaded file
+            files = [f for f in os.listdir(local_path) if f.endswith(".mp4")]
+            if files:
+                latest_file = os.path.join(
+                    local_path,
+                    max(
+                        files,
+                        key=lambda x: os.path.getctime(os.path.join(local_path, x)),
+                    ),
+                )
+                print(f"File: {latest_file}")
+
+                # Get file size
+                size_mb = os.path.getsize(latest_file) / (1024 * 1024)
+                print(f"Size: {size_mb:.2f} MB")
+
+                # Open file explorer
+                open_file_explorer(latest_file)
+        else:
+            print(f"\n❌ Download failed with exit code: {result.returncode}")
+            print("Please check the error messages above.")
+
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Download interrupted by user")
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        import traceback
+
+        traceback.print_exc()
+
+
 def download_protected_site_video(url, site_type):
     """
     Download video from protected sites using yt-dlp specialized handling
@@ -1335,6 +1410,19 @@ def download_protected_site_video(url, site_type):
             "outtmpl": os.path.join(temp_dir, "%(title)s.%(ext)s"),
             "nooverwrites": True,
             "merge_output_format": "mp4",
+            # HTTP headers to bypass 403 errors (especially for Rumble)
+            "http_headers": {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+                "Accept": (
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                ),
+                "Accept-Language": "en-us,en;q=0.5",
+                "Sec-Fetch-Mode": "navigate",
+            },
             # CRITICAL: Enhanced post-processing for DASH
             "postprocessors": [
                 {
@@ -1400,6 +1488,11 @@ def download_protected_site_video(url, site_type):
                     },
                 }
             )
+        elif site_type == "rumble":
+            # Rumble requires browser impersonation to bypass 403 errors
+            # This makes yt-dlp simulate a real Chrome browser
+            print("Using Rumble-optimized settings with browser impersonation...")
+            ydl_opts["impersonate"] = "chrome"  # Simulate Chrome browser
 
         if use_cookies:
             ydl_opts["cookiefile"] = cookies_file
@@ -1613,18 +1706,21 @@ def download_protected_site_video(url, site_type):
     except Exception as e:
         error_msg = str(e)
         print(f"\n❌ ERROR: {error_msg}")
-        
+
         # Handle specific yt-dlp errors
         if "Unknown algorithm ID" in error_msg:
             print("\n⚠️  YT-DLP VERSION ISSUE DETECTED")
-            print("This error indicates that your yt-dlp version doesn't support this site.")
+            print(
+                "This error indicates that your yt-dlp version doesn't support this site."
+            )
             print("Please update yt-dlp:")
             print("  1. Open Command Prompt as Administrator")
             print("  2. Run: python -m pip install --upgrade yt-dlp")
             print("  3. Or: pip install --upgrade yt-dlp")
             print("\nAlternatively, the site might be blocking downloads.")
-            
+
         import traceback
+
         print("\nFull traceback:")
         traceback.print_exc()
 
@@ -1650,9 +1746,14 @@ def download_generic_video_with_fallback(url):
         print(f"\nProtected site detected: {site_type} ({url})")
         print("Skipping generic method - using specialized yt-dlp...")
 
-        # Use yt-dlp directly for protected sites (more efficient)
+        # Use specialized handler for each protected site
         try:
-            download_protected_site_video(url, site_type)
+            if site_type == "rumble":
+                # Rumble requires special CLI-based impersonation
+                download_rumble_video(url)
+            else:
+                # Other protected sites use the standard handler
+                download_protected_site_video(url, site_type)
         except Exception as e:
             print(f"Download failed for protected site: {str(e)}")
             print("Please check:")
