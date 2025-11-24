@@ -35,7 +35,7 @@ openInAI() {
     aiMenu.Add("Copilot", (*) => Run("https://copilot.microsoft.com"))
     aiMenu.Add("Perplexity", (*) => Run("https://www.perplexity.ai/"))
     aiMenu.Add("Grok", (*) => Run("https://x.com/i/grok"))
-    aiMenu.Add("Poe", (*) => Run("https://poe.com"))
+    ; aiMenu.Add("Poe", (*) => Run("https://poe.com"))
     
     aiMenu.Add() ; Separator
     
