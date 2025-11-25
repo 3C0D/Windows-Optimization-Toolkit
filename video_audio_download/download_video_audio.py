@@ -240,6 +240,10 @@ def detect_protected_sites(url):
         "pluzz.francetv.fr": "francetv",
         "rumble.com": "rumble",
         "www.rumble.com": "rumble",
+        "twitter.com": "twitter",
+        "www.twitter.com": "twitter",
+        "x.com": "twitter",
+        "www.x.com": "twitter",
     }
 
     domain = urlparse(url).netloc.lower()
