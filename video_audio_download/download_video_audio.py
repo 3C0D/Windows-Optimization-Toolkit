@@ -16,6 +16,9 @@ from tqdm import tqdm
 import requests
 import browser_cookie3
 
+# Import du KVS extractor
+from kvs_extractor import KVSExtractor
+
 # Platform specific
 if sys.platform == "win32":
     import winreg
@@ -214,6 +217,84 @@ def update_yt_dlp():
             print(f"Error updating yt-dlp: {result.stderr}")
     except Exception as e:
         print(f"Error updating yt-dlp: {e}")
+
+
+def detect_kvs_sites(url):
+    """
+    Détecte si l'URL appartient à un site utilisant KVS (Kernel Video Sharing)
+    """
+    kvs_sites = [
+        "pervarchive.com",
+        "www.pervarchive.com",
+        "pervertium.com",
+        "www.pervertium.com",
+        "tezfiles.com",
+        "www.tezfiles.com",
+        # Ajoutez d'autres sites KVS ici
+    ]
+    
+    domain = urlparse(url).netloc.lower()
+    
+    for kvs_domain in kvs_sites:
+        if domain == kvs_domain or domain.endswith("." + kvs_domain):
+            print(f"Site KVS détecté: {domain}")
+            return True
+    
+    return False
+
+
+def download_kvs_video(url):
+    """Télécharge une vidéo depuis un site KVS"""
+    print("\nAnalyse de la vidéo KVS...")
+    
+    # Déterminer le chemin de destination
+    local_path = get_download_path("generic")
+    
+    # Utiliser le fichier cookies s'il existe
+    cookies_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+    
+    try:
+        # Créer l'extracteur KVS
+        extractor = KVSExtractor(cookies_file if os.path.exists(cookies_file) else None)
+        
+        # Extraire les informations vidéo
+        video_info = extractor.extract_video_info(url)
+        
+        if video_info and video_info['sources']:
+            print(f"Titre: {video_info['title']}")
+            print(f"Sources trouvées: {len(video_info['sources'])}")
+            
+            for i, source in enumerate(video_info['sources']):
+                print(f"  {i+1}. {source}")
+            
+            # Télécharger automatiquement
+            print("\nTéléchargement en cours...")
+            success = extractor.download_video(video_info, local_path)
+            
+            if success:
+                # Trouver le fichier téléchargé le plus récent
+                files = [f for f in os.listdir(local_path) if f.endswith('.mp4')]
+                if files:
+                    latest_file = os.path.join(
+                        local_path,
+                        max(files, key=lambda x: os.path.getctime(os.path.join(local_path, x)))
+                    )
+                    print(f"Fichier téléchargé: {latest_file}")
+                    open_file_explorer(latest_file)
+                else:
+                    print("Téléchargement terminé")
+                    open_file_explorer(local_path)
+            else:
+                print("Échec du téléchargement")
+        else:
+            print("Aucune source vidéo trouvée")
+            print("Tentative avec yt-dlp comme fallback...")
+            download_generic_video_with_fallback(url)
+            
+    except Exception as e:
+        print(f"Erreur avec l'extracteur KVS: {e}")
+        print("Tentative avec yt-dlp comme fallback...")
+        download_generic_video_with_fallback(url)
 
 
 def detect_protected_sites(url):
@@ -1983,8 +2064,12 @@ def main():
         elif type_url == "local":
             download_local_audio(url)
         else:
-            # Use the new fallback method for generic URLs
-            download_generic_video_with_fallback(url)
+            # Vérifier d'abord si c'est un site KVS
+            if detect_kvs_sites(url):
+                download_kvs_video(url)
+            else:
+                # Use the new fallback method for generic URLs
+                download_generic_video_with_fallback(url)
     except Exception as e:
         print(f"Erreur lors du traitement : {e}")
 
