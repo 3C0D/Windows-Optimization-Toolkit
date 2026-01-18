@@ -465,6 +465,11 @@ def is_valid_odysee_url(url):
     return bool(re.match(odysee_regex, url))
 
 
+def is_valid_instagram_url(url):
+    instagram_regex = r"https?://(www\.)?instagram\.com/(p|reel|tv)/([a-zA-Z0-9_-]+)"
+    return bool(re.match(instagram_regex, url))
+
+
 def is_valid_url(url):
     """Vérifie si la chaîne est une URL valide"""
     url_regex = r"^https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$"
@@ -495,6 +500,9 @@ def get_url_from_clipboard():
         elif is_valid_odysee_url(content):
             print("URL Odysee valide trouvée.")
             return ("odysee", content)
+        elif is_valid_instagram_url(content):
+            print("URL Instagram valide trouvée.")
+            return ("instagram", content)
         else:
             print("URL générique trouvée.")
             return ("generic", content)
@@ -1259,6 +1267,233 @@ def download_odysee_video(url):
             print(
                 "Veuillez réessayer ou vérifier que yt-dlp est correctement installé."
             )
+
+
+def download_instagram_video(url):
+    """Télécharge une vidéo depuis Instagram avec yt-dlp"""
+    print("\nAnalyse de la vidéo Instagram...")
+
+    # Demander à l'utilisateur s'il souhaite télécharger la vidéo ou seulement l'audio
+    print("\nQue souhaitez-vous télécharger ?")
+    print("1. Vidéo (avec audio)")
+    print("2. Audio uniquement (MP3)")
+
+    download_type = None
+    while download_type is None:
+        try:
+            choice = input(
+                "\nEntrez votre choix (1-2) ou appuyez sur Entrée pour la vidéo: "
+            )
+            if not choice.strip():
+                download_type = "video"
+            else:
+                choice = int(choice)
+                if choice == 1:
+                    download_type = "video"
+                elif choice == 2:
+                    download_type = "audio"
+                else:
+                    print("Veuillez entrer 1 ou 2")
+        except ValueError:
+            print("Veuillez entrer un nombre valide")
+
+    # Déterminer le chemin de destination en fonction du type de téléchargement
+    if download_type == "video":
+        local_path = get_download_path("generic")
+    else:  # audio
+        local_path = get_download_path("generic_audio")
+
+    # Add cookies file if available
+    cookies_file = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "cookies.txt"
+    )
+    use_cookies = os.path.exists(cookies_file)
+
+    try:
+        # Options pour l'extraction des informations
+        info_opts = {
+            "noplaylist": True,
+            "nocheckcertificate": True,
+            "ignoreerrors": True,
+            "no_color": True,
+            "extractor_retries": 10,
+            "socket_timeout": 60,
+            "ffmpeg_location": r"C:\ffmpeg\bin",
+        }
+
+        # Use cookies if available
+        if use_cookies:
+            info_opts["cookiefile"] = cookies_file
+            print(f"Utilisation du fichier de cookies: {cookies_file}")
+
+        # Extraire les informations de la vidéo sans télécharger
+        with yt_dlp.YoutubeDL(info_opts) as ydl:
+            print("Extraction des informations de la vidéo Instagram...")
+            info = ydl.extract_info(url, download=False)
+            video_title = info.get("title", "instagram_video")
+
+            # Nettoyer le titre pour le nom de fichier
+            clean_title = re.sub(r'[<>:"/\\|?*]', "_", video_title or "instagram_video")
+
+            # Déterminer l'extension en fonction du type de téléchargement
+            file_ext = ".mp3" if download_type == "audio" else ".mp4"
+            filename = f"{clean_title}{file_ext}"
+            filepath = os.path.join(local_path, filename)
+
+            # Vérifier si le fichier existe déjà
+            if os.path.exists(filepath):
+                print("\n" + "=" * 60)
+                print(f"ATTENTION: Le fichier '{video_title}' existe déjà !")
+                print(f"Chemin: {filepath}")
+                print("=" * 60)
+
+                while True:
+                    choice = input("Voulez-vous remplacer ce fichier ? (o/n): ").lower()
+                    if choice in ["o", "oui", "y", "yes"]:
+                        print("Le fichier existant sera remplacé.")
+                        try:
+                            os.remove(filepath)
+                            print("Fichier existant supprimé.")
+                            break
+                        except Exception as e:
+                            print(f"Impossible de supprimer le fichier existant: {e}")
+                            return
+                    elif choice in ["n", "non", "no"]:
+                        print("Téléchargement annulé.")
+                        return
+                    else:
+                        print("Veuillez répondre par 'o' (oui) ou 'n' (non).")
+
+            # Options pour le téléchargement
+            ydl_opts = {
+                "format": "best" if download_type == "video" else "bestaudio/best",
+                "outtmpl": os.path.join(local_path, "%(title)s.%(ext)s"),
+                "ffmpeg_location": r"C:\ffmpeg\bin",
+                "noplaylist": True,
+                "nocheckcertificate": True,
+                "ignoreerrors": True,
+                "no_color": True,
+                "extractor_retries": 10,
+                "socket_timeout": 60,
+            }
+
+            # Options spécifiques selon le type de téléchargement
+            if download_type == "video":
+                # Pour la vidéo, forcer la sortie en MP4
+                ydl_opts["merge_output_format"] = "mp4"
+            else:  # Audio uniquement
+                # Pour l'audio, extraire l'audio et convertir en MP3
+                ydl_opts["extractaudio"] = True
+                ydl_opts["audioformat"] = "mp3"
+                ydl_opts["audioquality"] = "192"
+                # Options supplémentaires pour la conversion audio
+                ydl_opts["postprocessors"] = [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "192",
+                    }
+                ]
+
+            if use_cookies:
+                ydl_opts["cookiefile"] = cookies_file
+
+            # Télécharger la vidéo avec yt-dlp
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                print(f"\nTéléchargement Instagram en cours...")
+                ydl.download([url])
+
+                # Vérifier le fichier téléchargé
+                file_ext = ".mp3" if download_type == "audio" else ".mp4"
+                final_path = filepath
+
+                # Si le fichier n'existe pas avec le nom prévu, chercher le fichier réel
+                if not os.path.exists(final_path):
+                    files = os.listdir(local_path)
+                    matching_files = [
+                        os.path.join(local_path, f) for f in files if f.endswith(file_ext)
+                    ]
+
+                    if matching_files:
+                        newest_file = max(
+                            matching_files, key=os.path.getctime, default=None
+                        )
+                        if newest_file:
+                            final_path = newest_file
+
+                print("Téléchargement Instagram terminé avec succès.")
+                print(f"Fichier enregistré dans: {final_path}")
+                open_file_explorer(final_path)
+
+    except Exception as e:
+        print(f"Erreur avec yt-dlp pour Instagram : {str(e)}")
+        print("Tentative avec méthode alternative...")
+
+        # Méthode alternative avec subprocess
+        try:
+            cmd = [
+                sys.executable,
+                "-m",
+                "yt_dlp",
+                "--format",
+                "best" if download_type == "video" else "bestaudio/best",
+                "--output",
+                os.path.join(local_path, "%(title)s.%(ext)s"),
+                "--ffmpeg-location",
+                r"C:\ffmpeg\bin",
+                "--no-playlist",
+                "--no-check-certificate",
+            ]
+
+            if download_type == "video":
+                cmd.extend(["--merge-output-format", "mp4"])
+            else:
+                cmd.extend([
+                    "--extract-audio",
+                    "--audio-format",
+                    "mp3",
+                    "--audio-quality",
+                    "192",
+                ])
+
+            if use_cookies:
+                cmd.extend(["--cookies", cookies_file])
+
+            cmd.append(url)
+
+            print("\nTéléchargement Instagram avec subprocess...")
+            result = subprocess.run(cmd, capture_output=True, text=True)
+
+            if result.returncode != 0:
+                print(f"Erreur subprocess: {result.stderr}")
+                raise Exception(result.stderr)
+
+            # Essayer de trouver le fichier le plus récent avec la bonne extension
+            try:
+                file_ext = ".mp3" if download_type == "audio" else ".mp4"
+                files = os.listdir(local_path)
+                matching_files = [
+                    os.path.join(local_path, f) for f in files if f.endswith(file_ext)
+                ]
+
+                if matching_files:
+                    newest_file = max(matching_files, key=os.path.getctime)
+                    print("Téléchargement Instagram terminé avec succès.")
+                    print(f"Fichier enregistré dans: {newest_file}")
+                    open_file_explorer(newest_file)
+                else:
+                    print("Téléchargement Instagram terminé avec succès.")
+                    print(f"Fichier enregistré dans le dossier: {local_path}")
+                    open_file_explorer(local_path)
+            except Exception as e:
+                print(f"Erreur lors de la recherche du fichier: {e}")
+                print("Téléchargement Instagram terminé avec succès.")
+                print(f"Fichier enregistré dans le dossier: {local_path}")
+                open_file_explorer(local_path)
+
+        except Exception as e2:
+            print(f"Toutes les tentatives Instagram ont échoué. Erreur finale : {str(e2)}")
+            return
 
 
 def download_local_audio(file_path):
@@ -2061,6 +2296,8 @@ def main():
             download_youtube_video(url)
         elif type_url == "odysee":
             download_odysee_video(url)
+        elif type_url == "instagram":
+            download_instagram_video(url)
         elif type_url == "local":
             download_local_audio(url)
         else:
